@@ -1,0 +1,8 @@
+{
+  "name": "Smart Earning Telegram Mini App",
+  "description": "Telegram Mini App (TMA) for Smart Earning with tasks, video rewards, referrals, and bKash/Nagad withdrawals",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
