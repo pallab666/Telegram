@@ -29,7 +29,7 @@ export interface EarnTask {
 export interface VideoClip {
   id: string;
   title: string;
-  category: 'all' | 'viral' | 'marketing' | 'trailer' | 'funny';
+  category: 'all' | 'movies' | 'funny' | 'music' | 'gaming' | 'news';
   duration: number; // in seconds
   reward: number;
   thumbnailUrl: string;
@@ -41,7 +41,7 @@ export interface VideoClip {
 export interface WithdrawalRecord {
   id: string;
   date: string;
-  method: 'bKash' | 'Nagad' | 'Rocket' | 'Upay';
+  method: 'bKash' | 'Nagad' | 'Rocket' | 'Binance';
   accountNumber: string;
   accountType: 'Personal' | 'Agent';
   amount: number;

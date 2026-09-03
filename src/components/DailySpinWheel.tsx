@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Clock, Gift, Play, Flame, Trophy } from 'lucide-react';
-import { triggerHaptic } from '../utils/telegram';
-import { triggerSmartAd } from '../utils/adManager';
-import { AppPreferences, formatMoney, playAppSound } from '../utils/preferences';
+import React, { useState, useEffect } from "react";
+import { motion } from "motion/react";
+import { Sparkles, Clock, Gift, Play, Flame, Trophy } from "lucide-react";
+import { triggerHaptic } from "../utils/telegram";
+import { triggerSmartAd } from "../utils/adManager";
+import {
+  AppPreferences,
+  formatMoney,
+  playAppSound,
+} from "../utils/preferences";
 
 interface DailySpinWheelProps {
   onWinReward: (amount: number) => void;
@@ -17,22 +22,25 @@ interface Sector {
 }
 
 const SECTORS: Sector[] = [
-  { amount: 1.0, label: '৳১.০', color: '#6366f1', textColor: '#ffffff' }, // Indigo
-  { amount: 2.5, label: '৳২.৫', color: '#10b981', textColor: '#ffffff' }, // Emerald
-  { amount: 0.5, label: '৳০.৫', color: '#f59e0b', textColor: '#ffffff' }, // Amber
-  { amount: 5.0, label: '৳৫.০', color: '#ec4899', textColor: '#ffffff' }, // Pink
-  { amount: 1.5, label: '৳১.৫', color: '#8b5cf6', textColor: '#ffffff' }, // Purple
-  { amount: 3.0, label: '৳৩.০', color: '#3b82f6', textColor: '#ffffff' }, // Blue
-  { amount: 10.0, label: '৳১০ 🔥', color: '#ef4444', textColor: '#ffffff' }, // Red (Jackpot)
-  { amount: 2.0, label: '৳২.০', color: '#14b8a6', textColor: '#ffffff' }, // Teal
+  { amount: 1.0, label: "৳১.০", color: "#6366f1", textColor: "#ffffff" }, // Indigo
+  { amount: 2.5, label: "৳২.৫", color: "#10b981", textColor: "#ffffff" }, // Emerald
+  { amount: 0.5, label: "৳০.৫", color: "#f59e0b", textColor: "#ffffff" }, // Amber
+  { amount: 5.0, label: "৳৫.০", color: "#ec4899", textColor: "#ffffff" }, // Pink
+  { amount: 1.5, label: "৳১.৫", color: "#8b5cf6", textColor: "#ffffff" }, // Purple
+  { amount: 3.0, label: "৳৩.০", color: "#3b82f6", textColor: "#ffffff" }, // Blue
+  { amount: 10.0, label: "৳১০ 🔥", color: "#ef4444", textColor: "#ffffff" }, // Red (Jackpot)
+  { amount: 2.0, label: "৳২.০", color: "#14b8a6", textColor: "#ffffff" }, // Teal
 ];
 
 const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
-const STORAGE_KEY = 'smart_earning_daily_spin_last_time';
+const STORAGE_KEY = "smart_earning_daily_spin_last_time";
 
-export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, preferences }) => {
-  const isBn = preferences?.language !== 'en';
-  const currency = preferences?.currency || 'BDT';
+export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({
+  onWinReward,
+  preferences,
+}) => {
+  const isBn = preferences?.language !== "en";
+  const currency = preferences?.currency || "BDT";
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -68,7 +76,7 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
     const hours = Math.floor(totalSec / 3600);
     const minutes = Math.floor((totalSec % 3600) / 60);
     const seconds = totalSec % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const handleSpin = () => {
@@ -76,13 +84,13 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
 
     // Trigger dual ad rotation (Adsterra / Monetag)
     try {
-      triggerSmartAd('spin');
+      triggerSmartAd("spin");
     } catch (e) {
-      console.warn('Ad trigger ignored', e);
+      console.warn("Ad trigger ignored", e);
     }
 
-    triggerHaptic('heavy');
-    playAppSound('click');
+    triggerHaptic("heavy");
+    playAppSound("click");
     setIsSpinning(true);
     setRecentWin(null);
 
@@ -111,15 +119,21 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
 
       // Trigger reward callback to parent
       onWinReward(chosenSector.amount);
-      triggerHaptic('success');
-      playAppSound('win');
+      triggerHaptic("success");
+      playAppSound("win");
     }, 3600);
   };
 
   const canSpin = cooldownRemaining <= 0 && !isSpinning;
 
   return (
-    <div className="px-4 py-2" id="section-daily-spin">
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+      className="px-4 py-2"
+      id="section-daily-spin"
+    >
       <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm relative overflow-hidden">
         {/* Background accent */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-100/60 to-purple-100/40 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none" />
@@ -183,13 +197,27 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
 
             {/* Segment Labels */}
             <div className="absolute inset-0 pointer-events-none text-white text-[10px] font-black select-none">
-              <span className="absolute top-2 left-1/2 -translate-x-1/2 drop-shadow-md">৳১.০</span>
-              <span className="absolute top-7 right-5 drop-shadow-md">৳২.৫</span>
-              <span className="absolute top-1/2 -translate-y-1/2 right-2 drop-shadow-md">৳০.৫</span>
-              <span className="absolute bottom-7 right-5 drop-shadow-md">৳৫.০</span>
-              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 drop-shadow-md">৳১.৫</span>
-              <span className="absolute bottom-7 left-5 drop-shadow-md">৳৩.০</span>
-              <span className="absolute top-1/2 -translate-y-1/2 left-2 drop-shadow-md">৳১০🔥</span>
+              <span className="absolute top-2 left-1/2 -translate-x-1/2 drop-shadow-md">
+                ৳১.০
+              </span>
+              <span className="absolute top-7 right-5 drop-shadow-md">
+                ৳২.৫
+              </span>
+              <span className="absolute top-1/2 -translate-y-1/2 right-2 drop-shadow-md">
+                ৳০.৫
+              </span>
+              <span className="absolute bottom-7 right-5 drop-shadow-md">
+                ৳৫.০
+              </span>
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 drop-shadow-md">
+                ৳১.৫
+              </span>
+              <span className="absolute bottom-7 left-5 drop-shadow-md">
+                ৳৩.০
+              </span>
+              <span className="absolute top-1/2 -translate-y-1/2 left-2 drop-shadow-md">
+                ৳১০🔥
+              </span>
               <span className="absolute top-7 left-5 drop-shadow-md">৳২.০</span>
             </div>
           </div>
@@ -215,16 +243,20 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
             id="btn-spin-wheel"
             className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${
               canSpin
-                ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/20 active:scale-[0.98] cursor-pointer'
+                ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/20 active:scale-[0.98] cursor-pointer"
                 : isSpinning
-                ? 'bg-amber-500 text-white cursor-wait opacity-90'
-                : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  ? "bg-amber-500 text-white cursor-wait opacity-90"
+                  : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
             }`}
           >
             {isSpinning ? (
               <>
                 <Play className="w-3.5 h-3.5 fill-white animate-spin" />
-                <span>{isBn ? 'চাকা ঘুরছে... শুভকামনা!' : 'Wheel spinning... Good luck!'}</span>
+                <span>
+                  {isBn
+                    ? "চাকা ঘুরছে... শুভকামনা!"
+                    : "Wheel spinning... Good luck!"}
+                </span>
               </>
             ) : cooldownRemaining > 0 ? (
               <>
@@ -238,12 +270,16 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onWinReward, pre
             ) : (
               <>
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{isBn ? 'এখনই স্পিন করুন (Free Spin)' : 'Spin Now (Free Spin)'}</span>
+                <span>
+                  {isBn
+                    ? "এখনই স্পিন করুন (Free Spin)"
+                    : "Spin Now (Free Spin)"}
+                </span>
               </>
             )}
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

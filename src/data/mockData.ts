@@ -71,7 +71,7 @@ export const INITIAL_VIDEOS: VideoClip[] = [
   {
     id: 'vid_1',
     title: '🔥 Dhaka Metro Rail Drone Cinematic Clip',
-    category: 'viral',
+    category: 'funny',
     duration: 15,
     reward: 2.50,
     thumbnailUrl: 'https://images.unsplash.com/photo-1517524008697-84bbe3c3fd98?auto=format&fit=crop&q=80&w=400',
@@ -82,7 +82,7 @@ export const INITIAL_VIDEOS: VideoClip[] = [
   {
     id: 'vid_2',
     title: '🎬 Top Bengali Movie Action Scene 2026',
-    category: 'trailer',
+    category: 'movies',
     duration: 20,
     reward: 3.00,
     thumbnailUrl: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=400',
@@ -93,7 +93,7 @@ export const INITIAL_VIDEOS: VideoClip[] = [
   {
     id: 'vid_3',
     title: '📱 New Smartphone Unboxing & Marketing Review',
-    category: 'marketing',
+    category: 'movies',
     duration: 25,
     reward: 4.00,
     thumbnailUrl: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=400',
@@ -104,7 +104,7 @@ export const INITIAL_VIDEOS: VideoClip[] = [
   {
     id: 'vid_4',
     title: '😂 Best Bangladeshi Comedy Short Reel',
-    category: 'viral',
+    category: 'funny',
     duration: 15,
     reward: 2.00,
     thumbnailUrl: 'https://images.unsplash.com/photo-1527525443983-6e60c75fff46?auto=format&fit=crop&q=80&w=400',

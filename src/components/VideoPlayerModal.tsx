@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Play, Pause, Sparkles, CheckCircle2, Maximize, Minimize } from 'lucide-react';
 import { VideoClip } from '../types';
@@ -108,8 +109,8 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const progress = ((video.duration - timeLeft) / video.duration) * 100;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm ">
+      <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", duration: 0.5, bounce: 0.3 }} className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800">
           <div className="flex items-center space-x-2">
@@ -236,7 +237,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
             </button>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

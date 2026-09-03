@@ -25,7 +25,7 @@ export const DEFAULT_AD_CONFIG: AdminAdConfig = {
   triggerOnVideo: true,
   triggerOnSpin: true,
   triggerOnTask: false,
-  minWithdraw: 50,
+  minWithdraw: 1000,
   adminPin: '3048',
   adsterraImpressions: 0,
   monetagImpressions: 0,
@@ -44,6 +44,7 @@ export function getAdConfig(): AdminAdConfig {
       return { 
         ...DEFAULT_AD_CONFIG, 
         ...parsed,
+        minWithdraw: parsed.minWithdraw === 50 ? 1000 : (parsed.minWithdraw || 1000),
         adsterraUrl1: parsed.adsterraUrl1 || parsed.adsterraUrl || DEFAULT_AD_CONFIG.adsterraUrl1,
         monetagUrl1: parsed.monetagUrl1 || parsed.monetagUrl || DEFAULT_AD_CONFIG.monetagUrl1,
       };

@@ -1,0 +1,23 @@
+
+> react-example@0.0.0 lint
+> tsc --noEmit
+
+src/components/AdminPanelModal.tsx(945,26): error TS17008: JSX element 'button' has no corresponding closing tag.
+src/components/AdminPanelModal.tsx(956,27): error TS17002: Expected corresponding JSX closing tag for 'div'.
+src/components/AdminPanelModal.tsx(967,28): error TS17008: JSX element 'div' has no corresponding closing tag.
+src/components/AdminPanelModal.tsx(979,28): error TS17008: JSX element 'div' has no corresponding closing tag.
+src/components/AdminPanelModal.tsx(1136,17): error TS1005: ')' expected.
+src/components/AdminPanelModal.tsx(1216,17): error TS1005: ')' expected.
+src/components/AdminPanelModal.tsx(1246,17): error TS17002: Expected corresponding JSX closing tag for 'motion.div'.
+src/components/AdminPanelModal.tsx(1248,11): error TS1128: Declaration or statement expected.
+src/components/AdminPanelModal.tsx(1249,9): error TS1109: Expression expected.
+src/components/AdminPanelModal.tsx(1249,10): error TS1128: Declaration or statement expected.
+src/components/AdminPanelModal.tsx(1250,7): error TS1128: Declaration or statement expected.
+src/components/AdminPanelModal.tsx(1251,5): error TS1109: Expression expected.
+src/components/AdminPanelModal.tsx(1252,3): error TS1109: Expression expected.
+src/components/AdminPanelModal.tsx(1253,1): error TS1128: Declaration or statement expected.
+src/components/QuickActions.tsx(28,8): error TS17008: JSX element 'motion.div' has no corresponding closing tag.
+src/components/QuickActions.tsx(158,7): error TS1005: ')' expected.
+src/components/QuickActions.tsx(159,5): error TS1109: Expression expected.
+src/components/QuickActions.tsx(160,3): error TS1109: Expression expected.
+src/components/QuickActions.tsx(161,1): error TS1128: Declaration or statement expected.

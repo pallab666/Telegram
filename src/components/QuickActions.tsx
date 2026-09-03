@@ -1,7 +1,8 @@
-import React from 'react';
-import { ListChecks, Video, Users, Landmark } from 'lucide-react';
-import { triggerHaptic } from '../utils/telegram';
-import { AppPreferences } from '../utils/preferences';
+import React from "react";
+import { motion } from "motion/react";
+import { ListChecks, Video, Users, Landmark } from "lucide-react";
+import { triggerHaptic } from "../utils/telegram";
+import { AppPreferences } from "../utils/preferences";
 
 interface QuickActionsProps {
   onOpenTasks: () => void;
@@ -20,15 +21,32 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   pendingTasksCount = 0,
   preferences,
 }) => {
-  const isBn = preferences?.language !== 'en';
+  const isBn = preferences?.language !== "en";
 
   return (
     <div className="px-4 py-4" id="section-quick-actions">
-      <div className="grid grid-cols-4 gap-3">
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        }}
+        className="grid grid-cols-4 gap-3"
+      >
         {/* 1. Tasks */}
-        <button
+        <motion.button
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.9 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              transition: { type: "spring", bounce: 0.4 },
+            },
+          }}
           onClick={() => {
-            triggerHaptic('medium');
+            triggerHaptic("medium");
             onOpenTasks();
           }}
           className="flex flex-col items-center gap-2 group active:scale-95 transition-transform cursor-pointer"
@@ -43,62 +61,101 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
             )}
           </div>
           <span className="text-[12px] font-black text-slate-700">
-            {isBn ? 'টাস্ক' : 'Tasks'}
+            {isBn ? "টাস্ক" : "Tasks"}
           </span>
-        </button>
+        </motion.button>
 
         {/* 2. Videos */}
-        <button
+        <motion.button
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.9 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              transition: { type: "spring", bounce: 0.4 },
+            },
+          }}
           onClick={() => {
-            triggerHaptic('medium');
+            triggerHaptic("medium");
             onOpenVideos();
           }}
           className="flex flex-col items-center gap-2 group active:scale-95 transition-transform cursor-pointer"
           id="btn-quick-videos"
         >
           <div className="w-[3.5rem] h-[3.5rem] rounded-[1.25rem] bg-[#f97316] flex items-center justify-center shadow-sm">
-            <Video className="w-6 h-6 text-white" strokeWidth={2.5} fill="currentColor" />
+            <Video
+              className="w-6 h-6 text-white"
+              strokeWidth={2.5}
+              fill="currentColor"
+            />
           </div>
           <span className="text-[12px] font-black text-slate-700">
-            {isBn ? 'ভিডিও' : 'Videos'}
+            {isBn ? "ভিডিও" : "Videos"}
           </span>
-        </button>
+        </motion.button>
 
         {/* 3. Refer */}
-        <button
+        <motion.button
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.9 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              transition: { type: "spring", bounce: 0.4 },
+            },
+          }}
           onClick={() => {
-            triggerHaptic('medium');
+            triggerHaptic("medium");
             onOpenRefer();
           }}
           className="flex flex-col items-center gap-2 group active:scale-95 transition-transform cursor-pointer"
           id="btn-quick-refer"
         >
           <div className="w-[3.5rem] h-[3.5rem] rounded-[1.25rem] bg-[#3b82f6] flex items-center justify-center shadow-sm">
-            <Users className="w-6 h-6 text-white" strokeWidth={2.5} fill="currentColor" />
+            <Users
+              className="w-6 h-6 text-white"
+              strokeWidth={2.5}
+              fill="currentColor"
+            />
           </div>
           <span className="text-[12px] font-black text-slate-700">
-            {isBn ? 'রেফার' : 'Refer'}
+            {isBn ? "রেফার" : "Refer"}
           </span>
-        </button>
+        </motion.button>
 
         {/* 4. Withdraw */}
-        <button
+        <motion.button
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.9 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              transition: { type: "spring", bounce: 0.4 },
+            },
+          }}
           onClick={() => {
-            triggerHaptic('medium');
+            triggerHaptic("medium");
             onOpenWithdraw();
           }}
           className="flex flex-col items-center gap-2 group active:scale-95 transition-transform cursor-pointer"
           id="btn-quick-withdraw"
         >
           <div className="w-[3.5rem] h-[3.5rem] rounded-[1.25rem] bg-[#10b981] flex items-center justify-center shadow-sm">
-            <Landmark className="w-6 h-6 text-white" strokeWidth={2.5} fill="currentColor" />
+            <Landmark
+              className="w-6 h-6 text-white"
+              strokeWidth={2.5}
+              fill="currentColor"
+            />
           </div>
           <span className="text-[12px] font-black text-slate-700">
-            {isBn ? 'উত্তোলন' : 'Withdraw'}
+            {isBn ? "উত্তোলন" : "Withdraw"}
           </span>
-        </button>
+        </motion.button>
       </div>
+      </motion.div>
     </div>
   );
 };
-

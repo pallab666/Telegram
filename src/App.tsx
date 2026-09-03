@@ -38,7 +38,7 @@ export default function App() {
         const parsed = JSON.parse(saved);
         return {
           ...parsed,
-          minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 50,
+          minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 1000,
         };
       } catch (e) {
         // fallback
@@ -46,7 +46,7 @@ export default function App() {
     }
     return {
       ...INITIAL_USER,
-      minWithdraw: adConfig.minWithdraw || 50,
+      minWithdraw: adConfig.minWithdraw || 1000,
     };
   });
 
@@ -60,7 +60,20 @@ export default function App() {
     return INITIAL_TASKS;
   });
 
-  const [videos, setVideos] = useState<VideoClip[]>(INITIAL_VIDEOS);
+  const [videos, setVideos] = useState<VideoClip[]>(() => {
+    try {
+      const stored = localStorage.getItem('smart_earning_videos');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_VIDEOS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('smart_earning_videos', JSON.stringify(videos));
+  }, [videos]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>(() => {
     try {
       const stored = localStorage.getItem('smart_earning_withdrawals');

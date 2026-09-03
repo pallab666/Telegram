@@ -1,13 +1,12 @@
+import { motion } from 'motion/react';
 import React, { useState } from 'react';
 import { X, Copy, Check, Terminal, ExternalLink, Bot, Globe, ShieldCheck, Sparkles, Code2 } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
-
 interface BotSetupGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   appUrl: string;
 }
-
 export const BotSetupGuideModal: React.FC<BotSetupGuideModalProps> = ({
   isOpen,
   onClose,
@@ -16,24 +15,18 @@ export const BotSetupGuideModal: React.FC<BotSetupGuideModalProps> = ({
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [lang, setLang] = useState<'bn' | 'en'>('bn');
   const [activeTab, setActiveTab] = useState<'steps' | 'node' | 'python' | 'telegram'>('steps');
-
   if (!isOpen) return null;
-
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     triggerHaptic('success');
     setCopiedSection(id);
     setTimeout(() => setCopiedSection(null), 2000);
   };
-
   const nodeJsBotCode = `// bot.js - Node.js Telegram Mini App Bot
 import { Telegraf } from 'telegraf';
-
 const BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
 const WEB_APP_URL = '${appUrl || 'https://your-domain.com'}';
-
 const bot = new Telegraf(BOT_TOKEN);
-
 // /start command - sends the Mini App button
 bot.start((ctx) => {
   const firstName = ctx.from.first_name || 'User';
@@ -54,21 +47,16 @@ bot.start((ctx) => {
     }
   });
 });
-
 bot.launch().then(() => {
   console.log('🤖 Telegram Mini App Bot is running...');
 });
-
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));`;
-
   const pythonBotCode = `# bot.py - Python Telegram Mini App Bot
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
 BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 WEB_APP_URL = "${appUrl || 'https://your-domain.com'}"
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     keyboard = [
@@ -84,15 +72,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"হ্যালো {user_name}! 🚀\\nSmart Earning এ আপনাকে স্বাগতম। এখনই শুরু করতে নিচের বাটনে চাপ দিন:",
         reply_markup=reply_markup
     )
-
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     print("Bot is started...")
     app.run_polling()`;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm ">
       <div className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden text-slate-800">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-slate-900 border-b border-slate-800">
@@ -109,7 +95,6 @@ if __name__ == '__main__':
               </p>
             </div>
           </div>
-
           <div className="flex items-center space-x-2">
             {/* Language toggle */}
             <button
@@ -121,7 +106,6 @@ if __name__ == '__main__':
             >
               {lang === 'bn' ? 'English' : 'বাংলা'}
             </button>
-
             <button
               onClick={() => {
                 triggerHaptic('light');
@@ -133,7 +117,6 @@ if __name__ == '__main__':
             </button>
           </div>
         </div>
-
         {/* Tab Selector */}
         <div className="flex items-center px-4 py-2.5 bg-slate-100 border-b border-slate-200 overflow-x-auto gap-1.5">
           <button
@@ -169,7 +152,6 @@ if __name__ == '__main__':
             ⚡ BotFather
           </button>
         </div>
-
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs sm:text-sm text-slate-700 bg-slate-50">
           {activeTab === 'steps' && (
@@ -185,7 +167,6 @@ if __name__ == '__main__':
                     : 'This is not just a text bot; it is a Telegram Mini App (TMA). It is a web app loaded inside Telegram with access to user credentials and haptics.'}
                 </p>
               </div>
-
               {/* Step 1 */}
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2 shadow-sm">
                 <div className="flex items-center gap-2 text-slate-900 font-bold">
@@ -207,7 +188,6 @@ if __name__ == '__main__':
                   </button>
                 </div>
               </div>
-
               {/* Step 2 */}
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2 shadow-sm">
                 <div className="flex items-center gap-2 text-slate-900 font-bold">
@@ -229,7 +209,6 @@ if __name__ == '__main__':
                   </button>
                 </div>
               </div>
-
               {/* Step 3 */}
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2 shadow-sm">
                 <div className="flex items-center gap-2 text-slate-900 font-bold">
@@ -242,7 +221,6 @@ if __name__ == '__main__':
                     : 'Use /setmenubutton in BotFather to place a persistent "Open App" button in the bottom-left chat corner.'}
                 </p>
               </div>
-
               {/* Step 4 */}
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 space-y-2 shadow-sm">
                 <div className="flex items-center gap-2 text-slate-900 font-bold">
@@ -257,7 +235,6 @@ if __name__ == '__main__':
               </div>
             </div>
           )}
-
           {activeTab === 'node' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -278,7 +255,6 @@ if __name__ == '__main__':
               </div>
             </div>
           )}
-
           {activeTab === 'python' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -299,7 +275,6 @@ if __name__ == '__main__':
               </div>
             </div>
           )}
-
           {activeTab === 'telegram' && (
             <div className="space-y-3">
               <h4 className="font-bold text-slate-900 text-sm">BotFather Commands Checklist:</h4>
@@ -328,7 +303,6 @@ if __name__ == '__main__':
             </div>
           )}
         </div>
-
         {/* Footer */}
         <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between shadow-sm">
           <span className="text-[11px] text-slate-500 font-medium">
@@ -345,6 +319,6 @@ if __name__ == '__main__':
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

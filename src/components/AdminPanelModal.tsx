@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -144,7 +145,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
     const updated: AdminAdConfig = {
       ...config,
-      minWithdraw: Math.max(10, Number(config.minWithdraw) || 50),
+      minWithdraw: Math.max(10, Number(config.minWithdraw) || 1000),
       adminPin: newPin.trim().length >= 4 ? newPin.trim() : config.adminPin,
     };
 
@@ -249,7 +250,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-sm ">
       <div className="relative w-full max-w-md max-h-[92vh] bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Top Header */}
         <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800 text-white flex-shrink-0">
@@ -843,7 +844,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
-                    
+                    </div>
                     {/* Adsterra Link 2 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
@@ -893,7 +894,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
-                    
                     {/* Monetag Link 2 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
@@ -951,8 +951,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">🎲 র‍্যান্ডম (Random)</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">৫০% র‍্যান্ডম সুযোগ</div>
+                          <div className="text-xs font-bold">🎲 র‍্যান্ডম (Random)
+                          <div className="text-[10px] text-slate-500 mt-0.5">৫০% র‍্যান্ডম সুযোগ
                         </button>
 
                         <button
@@ -964,7 +964,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">🅰️ শুধু Adsterra</div>
+                          <div className="text-xs font-bold">🅰️ শুধু Adsterra
                         </button>
 
                         <button
@@ -976,7 +976,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">Ⓜ️ শুধু Monetag</div>
+                          <div className="text-xs font-bold">Ⓜ️ শুধু Monetag
                         </button>
                       </div>
                     </div>
@@ -1132,14 +1132,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ) : (
               /* TAB 3: VIDEOS MANAGEMENT */
               <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
-                
+                </div>
                 {/* Upload New Video Form */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                     <Play className="w-4 h-4 text-pink-500 fill-pink-500" />
                     নতুন ভিডিও আপলোড করুন
                   </h3>
-                  
+                  </div>
                   <div className="space-y-3">
                     <div>
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Title (টাইটেল)</label>
@@ -1180,7 +1180,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
                       />
                     </div>
-                    
+                    </div>
                     <button
                       onClick={() => {
                         if (!newVideoTitle || !newVideoThumb || !newVideoUrl) {

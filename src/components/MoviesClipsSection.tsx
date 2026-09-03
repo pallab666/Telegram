@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
-import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
-import { VideoClip } from '../types';
-import { triggerHaptic } from '../utils/telegram';
+import React, { useRef } from "react";
+import { motion } from "motion/react";
+import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { VideoClip } from "../types";
+import { triggerHaptic } from "../utils/telegram";
 
 interface MoviesClipsSectionProps {
   videos: VideoClip[];
@@ -19,35 +20,42 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const categories = [
-    { id: 'all', label: 'All Videos' },
-    { id: 'marketing', label: 'পেড মার্কেটিং' },
-    { id: 'adsterra', label: 'Adsterra' },
-    { id: 'viral', label: 'Viral' },
+    { id: "all", label: "All Videos" },
+    { id: "movies", label: "Movies & Clips" },
+    { id: "funny", label: "Funny Shorts" },
+    { id: "music", label: "Music Videos" },
+    { id: "gaming", label: "Gaming" },
+    { id: "news", label: "Trending News" },
   ];
 
-  const handleScroll = (direction: 'left' | 'right') => {
-    triggerHaptic('light');
+  const handleScroll = (direction: "left" | "right") => {
+    triggerHaptic("light");
     if (scrollRef.current) {
       const scrollAmount = 150;
       scrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth',
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth",
       });
     }
   };
 
   const filteredVideos =
-    selectedCategory === 'all'
+    selectedCategory === "all"
       ? videos
-      : videos.filter((v) => v.category === selectedCategory || (selectedCategory === 'marketing' && v.category === 'marketing'));
+      : videos.filter((v) => v.category === selectedCategory);
 
   return (
-    <div className="px-4 py-2 space-y-4 pb-6" id="section-movies-clips">
-
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+      className="px-4 py-2 space-y-4 pb-6"
+      id="section-movies-clips"
+    >
       {/* 1. Category Carousel */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => handleScroll('left')}
+          onClick={() => handleScroll("left")}
           className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white flex items-center justify-center shadow-sm active:scale-90 transition-all"
         >
           <ChevronLeft className="w-4 h-4 stroke-[3]" />
@@ -63,13 +71,13 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
               <button
                 key={cat.id}
                 onClick={() => {
-                  triggerHaptic('light');
+                  triggerHaptic("light");
                   onSelectCategory(cat.id);
                 }}
                 className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm ${
                   isActive
-                    ? 'bg-[#8b5cf6] text-white shadow-md'
-                    : 'bg-white text-slate-700 hover:bg-slate-50'
+                    ? "bg-[#8b5cf6] text-white shadow-md"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 {cat.label}
@@ -79,7 +87,7 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
         </div>
 
         <button
-          onClick={() => handleScroll('right')}
+          onClick={() => handleScroll("right")}
           className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white flex items-center justify-center shadow-sm active:scale-90 transition-all"
         >
           <ChevronRight className="w-4 h-4 stroke-[3]" />
@@ -90,7 +98,9 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
       <div className="grid grid-cols-2 gap-3 pt-1">
         {filteredVideos.length === 0 ? (
           <div className="col-span-2 flex flex-col items-center justify-center py-10 text-slate-400 space-y-2 bg-white rounded-[1.5rem] border border-dashed border-slate-300">
-            <p className="text-xs font-semibold text-slate-500">Loading videos...</p>
+            <p className="text-xs font-semibold text-slate-500">
+              Loading videos...
+            </p>
           </div>
         ) : (
           filteredVideos.map((video) => (
@@ -98,7 +108,7 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
               key={video.id}
               className="group relative overflow-hidden rounded-[1.5rem] bg-white shadow-sm border-[3px] border-black transition-transform active:scale-[0.98] cursor-pointer flex flex-col"
               onClick={() => {
-                triggerHaptic('medium');
+                triggerHaptic("medium");
                 onWatchVideo(video);
               }}
             >
@@ -117,9 +127,9 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
                 </div>
 
                 <div className="absolute inset-0 flex items-center justify-center">
-                   <div className="w-10 h-10 rounded-full bg-red-600 border-[3px] border-white flex items-center justify-center shadow-lg">
-                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
-                   </div>
+                  <div className="w-10 h-10 rounded-full bg-red-600 border-[3px] border-white flex items-center justify-center shadow-lg">
+                    <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                  </div>
                 </div>
               </div>
 
@@ -133,7 +143,6 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
           ))
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
-
