@@ -46,6 +46,11 @@ export interface WithdrawalRecord {
   accountType: 'Personal' | 'Agent';
   amount: number;
   status: 'Pending' | 'Approved' | 'Rejected';
+  userName?: string;
+  userPhone?: string;
+  trxId?: string;
+  adminNote?: string;
+  processedAt?: string;
 }
 
 export interface LeaderboardRank {

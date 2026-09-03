@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Phone, Shield, BookOpen, ExternalLink, RefreshCw, Send, Check } from 'lucide-react';
+import { X, User, Phone, Shield, BookOpen, ExternalLink, RefreshCw, Send, Check, Landmark, ArrowUpRight } from 'lucide-react';
 import { UserData } from '../types';
 import { triggerHaptic } from '../utils/telegram';
 
@@ -9,6 +9,7 @@ interface ProfileModalProps {
   user: UserData;
   onUpdatePhone: (phone: string) => void;
   onOpenGuide: () => void;
+  onOpenWithdraw?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -17,6 +18,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   user,
   onUpdatePhone,
   onOpenGuide,
+  onOpenWithdraw,
 }) => {
   const [phone, setPhone] = useState(user.phone || '');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
@@ -103,6 +105,27 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Quick Withdraw button */}
+          {onOpenWithdraw && (
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                onClose();
+                onOpenWithdraw();
+              }}
+              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl flex items-center justify-between text-xs font-bold shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98] cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Landmark className="w-4 h-4" />
+                <span>টাকা উত্তোলন করুন (Withdraw)</span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] bg-white/20 px-2 py-0.5 rounded-lg">
+                <span>বিকাশ/নগদ</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </div>
+            </button>
+          )}
 
           {/* Phone Number / bKash settings */}
           <div className="p-3.5 bg-white border border-slate-200 rounded-2xl space-y-2 shadow-sm">

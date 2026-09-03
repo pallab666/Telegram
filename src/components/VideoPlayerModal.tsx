@@ -2,19 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { X, Play, Pause, Sparkles, CheckCircle2 } from 'lucide-react';
 import { VideoClip } from '../types';
 import { triggerHaptic } from '../utils/telegram';
+import { triggerSmartAd } from '../utils/adManager';
+import { AppPreferences, formatMoney, playAppSound } from '../utils/preferences';
 
 interface VideoPlayerModalProps {
   video: VideoClip | null;
   onClose: () => void;
   onClaimReward: (videoId: string, reward: number) => void;
+  preferences?: AppPreferences;
 }
 
 export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   video,
   onClose,
   onClaimReward,
+  preferences,
 }) => {
   if (!video) return null;
+
+  const isBn = preferences?.language !== 'en';
+  const currency = preferences?.currency || 'BDT';
 
   const [timeLeft, setTimeLeft] = useState(video.duration);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -26,6 +33,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     setCanClaim(false);
     setClaimed(video.watched);
     setIsPlaying(true);
+
+    // Trigger dual ad rotation (Adsterra / Monetag)
+    try {
+      triggerSmartAd('video');
+    } catch (e) {
+      console.warn('Ad trigger ignored', e);
+    }
   }, [video]);
 
   useEffect(() => {
@@ -49,6 +63,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const handleClaim = () => {
     if (!canClaim || claimed) return;
     triggerHaptic('success');
+    playAppSound('reward');
     setClaimed(true);
     onClaimReward(video.id, video.reward);
   };
@@ -124,30 +139,44 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           <div>
             <h3 className="text-sm font-bold text-slate-900 line-clamp-1">{video.title}</h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              পুরো ভিডিওটি দেখুন এবং পুরস্কার দাবি করতে অপেক্ষা করুন।
+              {isBn
+                ? 'পুরো ভিডিওটি দেখুন এবং পুরস্কার দাবি করতে অপেক্ষা করুন।'
+                : 'Watch the full video to claim your reward.'}
             </p>
           </div>
 
           {claimed ? (
             <div className="w-full py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-center gap-2 text-emerald-700 font-bold text-sm shadow-sm">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span>পুরস্কার ৳{video.reward.toFixed(2)} BDT সফলভাবে যোগ হয়েছে!</span>
+              <span>
+                {isBn
+                  ? `পুরস্কার ${formatMoney(video.reward, currency)} সফলভাবে যোগ হয়েছে!`
+                  : `Reward ${formatMoney(video.reward, currency)} added successfully!`}
+              </span>
             </div>
           ) : canClaim ? (
             <button
               onClick={handleClaim}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-98 transition-transform"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-98 transition-transform cursor-pointer"
               id="btn-claim-video-reward"
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>পুরস্কার নিন: ৳{video.reward.toFixed(2)} BDT</span>
+              <span>
+                {isBn
+                  ? `পুরস্কার নিন: ${formatMoney(video.reward, currency)}`
+                  : `Claim Reward: ${formatMoney(video.reward, currency)}`}
+              </span>
             </button>
           ) : (
             <button
               disabled
               className="w-full py-3 bg-slate-200 text-slate-500 font-bold text-sm rounded-xl cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <span>ভিডিও দেখা হচ্ছে ({timeLeft}s)...</span>
+              <span>
+                {isBn
+                  ? `ভিডিও দেখা হচ্ছে (${timeLeft}s)...`
+                  : `Watching video (${timeLeft}s)...`}
+              </span>
             </button>
           )}
         </div>

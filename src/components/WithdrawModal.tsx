@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertCircle, CheckCircle2, History, CreditCard, ShieldCheck } from 'lucide-react';
 import { WithdrawalRecord } from '../types';
 import { triggerHaptic } from '../utils/telegram';
+import { AppPreferences, CURRENCY_CONFIGS, formatMoney } from '../utils/preferences';
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface WithdrawModalProps {
   minWithdraw: number;
   withdrawals: WithdrawalRecord[];
   onRequestWithdraw: (newRecord: WithdrawalRecord) => void;
+  preferences?: AppPreferences;
 }
 
 export const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -19,7 +21,12 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   minWithdraw,
   withdrawals,
   onRequestWithdraw,
+  preferences,
 }) => {
+  const isBn = preferences?.language !== 'en';
+  const currency = preferences?.currency || 'BDT';
+  const curConfig = CURRENCY_CONFIGS[currency] || CURRENCY_CONFIGS.BDT;
+
   const [method, setMethod] = useState<'bKash' | 'Nagad' | 'Rocket' | 'Upay'>('bKash');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountType, setAccountType] = useState<'Personal' | 'Agent'>('Personal');
@@ -38,25 +45,29 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const parsedAmount = parseFloat(amount);
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrorMsg('অনুগ্রহ করে সঠিক টাকার পরিমাণ দিন');
+      setErrorMsg(isBn ? 'অনুগ্রহ করে সঠিক টাকার পরিমাণ দিন' : 'Please enter a valid amount');
       triggerHaptic('warning');
       return;
     }
 
     if (parsedAmount < minWithdraw) {
-      setErrorMsg(`সর্বনিম্ন উত্তোলনের সীমা ৳${minWithdraw.toFixed(2)} BDT`);
+      setErrorMsg(
+        isBn
+          ? `সর্বনিম্ন উত্তোলনের সীমা ৳${minWithdraw.toFixed(2)} BDT`
+          : `Minimum withdrawal limit is ৳${minWithdraw.toFixed(2)} BDT`
+      );
       triggerHaptic('warning');
       return;
     }
 
     if (parsedAmount > balance) {
-      setErrorMsg('আপনার বর্তমান ব্যালেন্সে পর্যাপ্ত টাকা নেই!');
+      setErrorMsg(isBn ? 'আপনার বর্তমান ব্যালেন্সে পর্যাপ্ত টাকা নেই!' : 'Insufficient balance!');
       triggerHaptic('warning');
       return;
     }
 
     if (!accountNumber || accountNumber.length < 11) {
-      setErrorMsg('সঠিক ১১ ডিজিটের মোবাইল নম্বর প্রদান করুন');
+      setErrorMsg(isBn ? 'সঠিক ১১ ডিজিটের মোবাইল নম্বর প্রদান করুন' : 'Please enter valid 11 digit number');
       triggerHaptic('warning');
       return;
     }
@@ -64,7 +75,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     triggerHaptic('success');
     const newRecord: WithdrawalRecord = {
       id: 'tx_' + Date.now().toString().slice(-6),
-      date: new Date().toLocaleDateString('bn-BD'),
+      date: new Date().toLocaleDateString(isBn ? 'bn-BD' : 'en-US'),
       method,
       accountNumber,
       accountType,
@@ -73,7 +84,11 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     };
 
     onRequestWithdraw(newRecord);
-    setSuccessMsg(`৳${parsedAmount} BDT উত্তোলনের আবেদন সফল হয়েছে! ২৪ ঘণ্টার মধ্যে আপনার ${method} একাউন্টে টাকা পৌঁছাবে।`);
+    setSuccessMsg(
+      isBn
+        ? `৳${parsedAmount} BDT (${formatMoney(parsedAmount, currency)}) উত্তোলনের আবেদন সফল হয়েছে! ২৪ ঘণ্টার মধ্যে আপনার ${method} একাউন্টে টাকা পৌঁছাবে।`
+        : `Withdrawal request for ৳${parsedAmount} BDT submitted! Will be processed within 24h to ${method}.`
+    );
   };
 
   return (
@@ -298,7 +313,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                       </span>
                       <div>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md inline-block mt-0.5 ${
                             item.status === 'Approved'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               : item.status === 'Pending'
@@ -306,9 +321,23 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                               : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}
                         >
-                          {item.status === 'Pending' ? 'প্রক্রিয়াধীন' : item.status === 'Approved' ? 'পরিশোধিত' : 'বাতিল'}
+                          {item.status === 'Pending'
+                            ? '⏳ অ্যাডমিন পেন্ডিং'
+                            : item.status === 'Approved'
+                            ? '✅ অনুমোদিত (Paid)'
+                            : '❌ বাতিল ও রিফান্ড'}
                         </span>
                       </div>
+                      {item.trxId && (
+                        <p className="text-[10px] text-emerald-600 font-mono mt-0.5 font-bold">
+                          TrxID: {item.trxId}
+                        </p>
+                      )}
+                      {item.adminNote && (
+                        <p className="text-[9px] text-rose-500 mt-0.5 max-w-[140px] truncate" title={item.adminNote}>
+                          {item.adminNote}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))

@@ -10,24 +10,44 @@ import { ReferModal } from './components/ReferModal';
 import { RankModal } from './components/RankModal';
 import { ProfileModal } from './components/ProfileModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
 import { BotSetupGuideModal } from './components/BotSetupGuideModal';
 import { VideoPlayerModal } from './components/VideoPlayerModal';
+import { DailySpinWheel } from './components/DailySpinWheel';
+import { InitialSetupModal } from './components/InitialSetupModal';
 import { INITIAL_USER, INITIAL_TASKS, INITIAL_VIDEOS, INITIAL_LEADERBOARD } from './data/mockData';
 import { UserData, EarnTask, VideoClip, WithdrawalRecord } from './types';
 import { initTelegramApp, getTelegramUser, triggerHaptic } from './utils/telegram';
+import { getAdConfig } from './utils/adManager';
+import {
+  AppPreferences,
+  getAppPreferences,
+  saveAppPreferences,
+  hasCompletedInitialSetup,
+  markInitialSetupCompleted,
+} from './utils/preferences';
 import { Sparkles } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 export default function App() {
   const [user, setUser] = useState<UserData>(() => {
+    const adConfig = getAdConfig();
     const saved = localStorage.getItem('smart_earning_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          ...parsed,
+          minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 50,
+        };
       } catch (e) {
         // fallback
       }
     }
-    return INITIAL_USER;
+    return {
+      ...INITIAL_USER,
+      minWithdraw: adConfig.minWithdraw || 50,
+    };
   });
 
   const [tasks, setTasks] = useState<EarnTask[]>(() => {
@@ -41,17 +61,32 @@ export default function App() {
   });
 
   const [videos, setVideos] = useState<VideoClip[]>(INITIAL_VIDEOS);
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([
-    {
-      id: 'tx_98124',
-      date: '০১/০৯/২০২৬',
-      method: 'bKash',
-      accountNumber: '01712345678',
-      accountType: 'Personal',
-      amount: 1000,
-      status: 'Approved',
-    },
-  ]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem('smart_earning_withdrawals');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      // safe fallback
+    }
+    return [
+      {
+        id: 'tx_98124',
+        date: '০১/০৯/২০২৬',
+        method: 'bKash',
+        accountNumber: '01712345678',
+        accountType: 'Personal',
+        amount: 1000,
+        status: 'Approved',
+        userName: 'রহিম আহমেদ',
+        trxId: 'BKASH782391',
+      },
+    ];
+  });
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -64,11 +99,28 @@ export default function App() {
   const [isRankOpen, setIsRankOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<VideoClip | null>(null);
 
+  // App preferences (Language & Currency) + Initial Setup Flow
+  const [preferences, setPreferences] = useState<AppPreferences>(() => getAppPreferences());
+  const [isInitialSetupOpen, setIsInitialSetupOpen] = useState<boolean>(() => !hasCompletedInitialSetup());
+
   // Reward notification toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleSavePreferences = (newPrefs: AppPreferences) => {
+    setPreferences(newPrefs);
+    saveAppPreferences(newPrefs);
+    markInitialSetupCompleted();
+    setIsInitialSetupOpen(false);
+    showToast(
+      newPrefs.language === 'bn'
+        ? '✅ ভাষা ও কারেন্সি আপডেট হয়েছে!'
+        : '✅ Language & Currency updated!'
+    );
+  };
 
   useEffect(() => {
     initTelegramApp();
@@ -105,11 +157,28 @@ export default function App() {
     localStorage.setItem('smart_earning_tasks', JSON.stringify(tasks));
   }, [tasks]);
 
+  useEffect(() => {
+    localStorage.setItem('smart_earning_withdrawals', JSON.stringify(withdrawals));
+  }, [withdrawals]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 3000);
+  };
+
+  const triggerCelebration = () => {
+    try {
+      confetti({
+        particleCount: 75,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#ef4444'],
+      });
+    } catch (e) {
+      // safe fallback
+    }
   };
 
   const handleClaimVideoReward = (videoId: string, reward: number) => {
@@ -123,6 +192,7 @@ export default function App() {
       prev.map((v) => (v.id === videoId ? { ...v, watched: true } : v))
     );
 
+    triggerCelebration();
     showToast(`🎉 +৳${reward.toFixed(2)} BDT ব্যালেন্সে যুক্ত হয়েছে!`);
   };
 
@@ -138,18 +208,89 @@ export default function App() {
       prev.map((t) => (t.id === taskId ? { ...t, completed: true } : t))
     );
 
+    triggerCelebration();
     showToast(`✅ টাস্ক সম্পন্ন! +৳${reward.toFixed(2)} BDT যোগ হয়েছে`);
   };
 
+  const handleSpinReward = (amount: number) => {
+    setUser((prev) => ({
+      ...prev,
+      balance: prev.balance + amount,
+      totalEarned: prev.totalEarned + amount,
+    }));
+
+    triggerCelebration();
+    showToast(`🎡 স্পিন থেকে +৳${amount.toFixed(2)} BDT জিতেছেন!`);
+  };
+
   const handleRequestWithdraw = (record: WithdrawalRecord) => {
+    const enrichedRecord: WithdrawalRecord = {
+      ...record,
+      userName: user.name,
+      userPhone: user.phone || record.accountNumber,
+      status: 'Pending',
+    };
+
     setUser((prev) => ({
       ...prev,
       balance: Math.max(0, prev.balance - record.amount),
       totalWithdrawn: prev.totalWithdrawn + record.amount,
     }));
 
-    setWithdrawals((prev) => [record, ...prev]);
-    showToast(`🔔 উত্তোলন রিকোয়েস্ট সফল হয়েছে!`);
+    setWithdrawals((prev) => [enrichedRecord, ...prev]);
+    showToast(
+      preferences.language === 'bn'
+        ? '🔔 উত্তোলনের আবেদন জমা হয়েছে! অ্যাডমিন প্যানেল অনুমোদনের পর টাকা পাঠানো হবে।'
+        : '🔔 Withdrawal request submitted! Awaiting admin panel approval.'
+    );
+  };
+
+  const handleApproveWithdrawal = (id: string, trxId?: string) => {
+    setWithdrawals((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'Approved',
+              trxId: trxId?.trim() || `TRX${Date.now().toString().slice(-6)}`,
+              processedAt: new Date().toLocaleDateString(
+                preferences.language === 'bn' ? 'bn-BD' : 'en-US'
+              ),
+            }
+          : item
+      )
+    );
+    showToast('✅ উত্তোলন সফলভাবে অনুমোদিত (Approved) হয়েছে!');
+  };
+
+  const handleRejectWithdrawal = (id: string, reason?: string) => {
+    const target = withdrawals.find((w) => w.id === id);
+    if (!target) return;
+
+    // Refund the amount back to the user balance if it was pending
+    if (target.status === 'Pending') {
+      setUser((prev) => ({
+        ...prev,
+        balance: prev.balance + target.amount,
+        totalWithdrawn: Math.max(0, prev.totalWithdrawn - target.amount),
+      }));
+    }
+
+    setWithdrawals((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'Rejected',
+              adminNote: reason?.trim() || 'ভুল একাউন্ট তথ্য বা নিয়ম লঙ্ঘন',
+              processedAt: new Date().toLocaleDateString(
+                preferences.language === 'bn' ? 'bn-BD' : 'en-US'
+              ),
+            }
+          : item
+      )
+    );
+    showToast('❌ উত্তোলন বাতিল ও ব্যালেন্স রিফান্ড করা হয়েছে!');
   };
 
   const handleResetData = () => {
@@ -186,8 +327,12 @@ export default function App() {
           user={user}
           onlineCount={onlineCount}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenAdmin={() => setIsAdminOpen(true)}
           onOpenGuide={() => setIsGuideOpen(true)}
           onOpenProfile={() => setIsProfileOpen(true)}
+          pendingWithdrawalsCount={
+            withdrawals.filter((w) => w.status === 'Pending').length
+          }
         />
 
         {/* Floating Toast Notification */}
@@ -205,6 +350,7 @@ export default function App() {
             balance={user.balance}
             minWithdraw={user.minWithdraw}
             onOpenWithdraw={() => setIsWithdrawOpen(true)}
+            preferences={preferences}
           />
 
           {/* 2. Quick Action Squircles (Tasks, Videos, Refer, Withdraw) */}
@@ -218,9 +364,13 @@ export default function App() {
             onOpenRefer={() => setIsReferOpen(true)}
             onOpenWithdraw={() => setIsWithdrawOpen(true)}
             pendingTasksCount={pendingTasksCount}
+            preferences={preferences}
           />
 
-          {/* 3. Movies & Clips Section */}
+          {/* 3. Daily Spin Wheel (Once every 24 hours with random prize & cooldown) */}
+          <DailySpinWheel onWinReward={handleSpinReward} preferences={preferences} />
+
+          {/* 4. Movies & Clips Section */}
           <MoviesClipsSection
             videos={videos}
             selectedCategory={selectedCategory}
@@ -251,6 +401,7 @@ export default function App() {
           minWithdraw={user.minWithdraw}
           withdrawals={withdrawals}
           onRequestWithdraw={handleRequestWithdraw}
+          preferences={preferences}
         />
 
         <ReferModal
@@ -281,6 +432,7 @@ export default function App() {
           user={user}
           onUpdatePhone={(phone) => setUser((prev) => ({ ...prev, phone }))}
           onOpenGuide={() => setIsGuideOpen(true)}
+          onOpenWithdraw={() => setIsWithdrawOpen(true)}
         />
 
         <SettingsModal
@@ -288,6 +440,22 @@ export default function App() {
           onClose={() => setIsSettingsOpen(false)}
           onOpenGuide={() => setIsGuideOpen(true)}
           onResetData={handleResetData}
+          preferences={preferences}
+          onUpdatePreferences={handleSavePreferences}
+          onOpenInitialSetup={() => setIsInitialSetupOpen(true)}
+          onOpenWithdraw={() => setIsWithdrawOpen(true)}
+        />
+
+        <AdminPanelModal
+          isOpen={isAdminOpen}
+          onClose={() => setIsAdminOpen(false)}
+          onUpdateMinWithdraw={(newMin) => {
+            setUser((prev) => ({ ...prev, minWithdraw: newMin }));
+          }}
+          onShowToast={showToast}
+          withdrawals={withdrawals}
+          onApproveWithdrawal={handleApproveWithdrawal}
+          onRejectWithdrawal={handleRejectWithdrawal}
         />
 
         <BotSetupGuideModal
@@ -300,6 +468,15 @@ export default function App() {
           video={activeVideo}
           onClose={() => setActiveVideo(null)}
           onClaimReward={handleClaimVideoReward}
+          preferences={preferences}
+        />
+
+        {/* Initial Setup Modal (Language & Currency selection on first launch or via Settings) */}
+        <InitialSetupModal
+          isOpen={isInitialSetupOpen}
+          currentPrefs={preferences}
+          onSave={handleSavePreferences}
+          isFirstTime={!hasCompletedInitialSetup()}
         />
       </div>
     </div>

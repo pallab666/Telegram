@@ -47,10 +47,16 @@ export function initTelegramApp() {
   }
 }
 
-export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' = 'light') {
+export function triggerHaptic(type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'light') {
   if (typeof window !== 'undefined' && window.Telegram?.WebApp?.HapticFeedback) {
     try {
-      if (type === 'success' || type === 'warning') {
+      const stored = localStorage.getItem('smart_earning_app_preferences');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.hapticEnabled === false) return;
+      }
+
+      if (type === 'success' || type === 'warning' || type === 'error') {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
       } else {
         window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
@@ -66,4 +72,21 @@ export function getTelegramUser() {
     return window.Telegram.WebApp.initDataUnsafe.user;
   }
   return null;
+}
+
+export function openAdLink(url: string) {
+  if (!url || typeof window === 'undefined') return;
+  try {
+    if (window.Telegram?.WebApp?.openLink) {
+      window.Telegram.WebApp.openLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  } catch (e) {
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('Failed to open ad link:', err);
+    }
+  }
 }
