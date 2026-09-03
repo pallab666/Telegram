@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, UserPlus, Coins, Award, User } from 'lucide-react';
+import { Home, Users, CheckSquare, Trophy, User } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 
 export type NavTab = 'home' | 'refer' | 'earn' | 'rank' | 'profile';
@@ -9,6 +9,14 @@ interface BottomNavProps {
   onSelectTab: (tab: NavTab) => void;
 }
 
+const TABS: { id: NavTab; label: string; icon: React.FC<any> }[] = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'refer', label: 'Refer', icon: Users },
+  { id: 'earn', label: 'Earn', icon: CheckSquare },
+  { id: 'rank', label: 'Rank', icon: Trophy },
+  { id: 'profile', label: 'Profile', icon: User }
+];
+
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) => {
   const handleTabClick = (tab: NavTab) => {
     triggerHaptic('light');
@@ -17,118 +25,45 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] select-none"
+      className="fixed bottom-0 left-0 right-0 w-full z-[60] flex justify-center pointer-events-none"
       id="bottom-navigation-bar"
     >
-      <div className="flex items-center justify-around relative">
-        {/* 1. Home Tab (Elevated Floating Button) */}
-        <button
-          onClick={() => handleTabClick('home')}
-          className="relative -top-3.5 flex flex-col items-center group focus:outline-none"
-          id="nav-tab-home"
-        >
-          <div className="relative w-12 h-12 rounded-2xl bg-white ring-4 ring-slate-100/90 p-1 flex items-center justify-center shadow-lg shadow-indigo-100 transition-transform active:scale-95 border border-slate-200/80">
-            <div className="w-full h-full rounded-xl bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white shadow-sm">
-              <Home className="w-5 h-5 fill-white stroke-white" />
-            </div>
-          </div>
-          <span
-            className={`mt-1 text-[10px] font-bold tracking-tight ${
-              activeTab === 'home' ? 'text-indigo-600' : 'text-slate-500'
-            }`}
-          >
-            Home
-          </span>
-        </button>
+      <div className="w-full max-w-md h-[72px] bg-white border-t border-slate-200 flex items-center justify-around px-2 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] pointer-events-auto rounded-t-3xl">
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+          
+          if (isActive) {
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                className="relative -top-6 flex flex-col items-center justify-center gap-1 w-16 group transition-transform active:scale-95"
+              >
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-[0_5px_15px_rgba(139,92,246,0.3)] border-4 border-[#f4f0ff] transition-colors">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Icon className="w-5 h-5 text-white" strokeWidth={2.5} />
+                  </div>
+                </div>
+                <span className="text-purple-700 text-[11px] font-black mt-1 absolute -bottom-5">{tab.label}</span>
+              </button>
+            );
+          }
 
-        {/* 2. Refer Tab */}
-        <button
-          onClick={() => handleTabClick('refer')}
-          className="flex flex-col items-center py-1 group active:scale-95 transition-transform"
-          id="nav-tab-refer"
-        >
-          <div
-            className={`transition-colors ${
-              activeTab === 'refer' ? 'text-indigo-600 scale-105' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <UserPlus className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <span
-            className={`text-[10px] font-bold mt-1 ${
-              activeTab === 'refer' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            Refer
-          </span>
-        </button>
-
-        {/* 3. Earn Tab */}
-        <button
-          onClick={() => handleTabClick('earn')}
-          className="flex flex-col items-center py-1 group active:scale-95 transition-transform"
-          id="nav-tab-earn"
-        >
-          <div
-            className={`transition-colors ${
-              activeTab === 'earn' ? 'text-indigo-600 scale-105' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <Coins className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <span
-            className={`text-[10px] font-bold mt-1 ${
-              activeTab === 'earn' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            Earn
-          </span>
-        </button>
-
-        {/* 4. Rank Tab */}
-        <button
-          onClick={() => handleTabClick('rank')}
-          className="flex flex-col items-center py-1 group active:scale-95 transition-transform"
-          id="nav-tab-rank"
-        >
-          <div
-            className={`transition-colors ${
-              activeTab === 'rank' ? 'text-indigo-600 scale-105' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <Award className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <span
-            className={`text-[10px] font-bold mt-1 ${
-              activeTab === 'rank' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            Rank
-          </span>
-        </button>
-
-        {/* 5. Profile Tab */}
-        <button
-          onClick={() => handleTabClick('profile')}
-          className="flex flex-col items-center py-1 group active:scale-95 transition-transform"
-          id="nav-tab-profile"
-        >
-          <div
-            className={`transition-colors ${
-              activeTab === 'profile' ? 'text-indigo-600 scale-105' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <User className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <span
-            className={`text-[10px] font-bold mt-1 ${
-              activeTab === 'profile' ? 'text-indigo-600' : 'text-slate-400'
-            }`}
-          >
-            Profile
-          </span>
-        </button>
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              className="flex flex-col items-center justify-center gap-1 w-14 transition-transform active:scale-95 pt-2"
+            >
+              <Icon className="w-6 h-6 text-slate-400 group-hover:text-purple-500" strokeWidth={2} />
+              <span className="text-[10px] font-bold text-slate-500 mt-1">{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
 };
+
+

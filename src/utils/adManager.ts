@@ -1,9 +1,11 @@
 import { openAdLink } from './telegram';
 
 export interface AdminAdConfig {
-  adsterraUrl: string;
-  monetagUrl: string;
-  rotationStrategy: 'alternate' | 'random' | 'adsterra_only' | 'monetag_only';
+  adsterraUrl1: string;
+  adsterraUrl2: string;
+  monetagUrl1: string;
+  monetagUrl2: string;
+  rotationStrategy: 'alternate' | 'random' | 'adsterra_only' | 'monetag_only' | 'cycle_all';
   triggerOnVideo: boolean;
   triggerOnSpin: boolean;
   triggerOnTask: boolean;
@@ -11,21 +13,23 @@ export interface AdminAdConfig {
   adminPin: string;
   adsterraImpressions: number;
   monetagImpressions: number;
-  lastServedNetwork: 'adsterra' | 'monetag';
+  lastAdIndex: number;
 }
 
 export const DEFAULT_AD_CONFIG: AdminAdConfig = {
-  adsterraUrl: 'https://www.profitablecpmrate.com/r03h02w7b?key=adsterra_direct_demo',
-  monetagUrl: 'https://otieuhoo.net/4/8392104?key=monetag_direct_demo',
-  rotationStrategy: 'alternate',
+  adsterraUrl1: 'https://example.com/adsterra1',
+  adsterraUrl2: 'https://example.com/adsterra2',
+  monetagUrl1: 'https://example.com/monetag1',
+  monetagUrl2: 'https://example.com/monetag2',
+  rotationStrategy: 'cycle_all',
   triggerOnVideo: true,
   triggerOnSpin: true,
   triggerOnTask: false,
   minWithdraw: 50,
-  adminPin: '7788',
+  adminPin: '3048',
   adsterraImpressions: 0,
   monetagImpressions: 0,
-  lastServedNetwork: 'monetag',
+  lastAdIndex: 0,
 };
 
 const STORAGE_KEY = 'smart_earning_ad_config';
@@ -36,7 +40,13 @@ export function getAdConfig(): AdminAdConfig {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_AD_CONFIG, ...parsed };
+      // Migrate old configs if necessary
+      return { 
+        ...DEFAULT_AD_CONFIG, 
+        ...parsed,
+        adsterraUrl1: parsed.adsterraUrl1 || parsed.adsterraUrl || DEFAULT_AD_CONFIG.adsterraUrl1,
+        monetagUrl1: parsed.monetagUrl1 || parsed.monetagUrl || DEFAULT_AD_CONFIG.monetagUrl1,
+      };
     }
   } catch (e) {
     console.error('Failed to parse ad config', e);
@@ -55,7 +65,7 @@ export function saveAdConfig(config: AdminAdConfig): void {
 
 /**
  * Smart Ad Dispatcher:
- * Intelligently alternates or rotates between Adsterra & Monetag
+ * Intelligently cycles between 4 Ad IDs (2 Adsterra + 2 Monetag)
  * to prevent duplicate ad impression penalties for users in the same location/IP.
  */
 export function triggerSmartAd(triggerPoint: 'video' | 'spin' | 'task' = 'video'): {
@@ -70,56 +80,61 @@ export function triggerSmartAd(triggerPoint: 'video' | 'spin' | 'task' = 'video'
   if (triggerPoint === 'spin' && !config.triggerOnSpin) return { served: false };
   if (triggerPoint === 'task' && !config.triggerOnTask) return { served: false };
 
-  const hasAdsterra = !!config.adsterraUrl && config.adsterraUrl.trim().length > 5;
-  const hasMonetag = !!config.monetagUrl && config.monetagUrl.trim().length > 5;
+  // Gather available URLs
+  const urls = [
+    { type: 'adsterra' as const, url: config.adsterraUrl1 },
+    { type: 'monetag' as const, url: config.monetagUrl1 },
+    { type: 'adsterra' as const, url: config.adsterraUrl2 },
+    { type: 'monetag' as const, url: config.monetagUrl2 },
+  ].filter(u => u.url && u.url.trim().length > 5);
 
-  if (!hasAdsterra && !hasMonetag) {
+  if (urls.length === 0) {
     return { served: false };
   }
 
-  let selectedNetwork: 'adsterra' | 'monetag' = 'adsterra';
-
-  if (hasAdsterra && hasMonetag) {
-    if (config.rotationStrategy === 'adsterra_only') {
-      selectedNetwork = 'adsterra';
-    } else if (config.rotationStrategy === 'monetag_only') {
-      selectedNetwork = 'monetag';
-    } else if (config.rotationStrategy === 'random') {
-      selectedNetwork = Math.random() < 0.5 ? 'adsterra' : 'monetag';
-    } else {
-      // 'alternate' (Auto 50/50 round-robin to solve same location issue)
-      selectedNetwork = config.lastServedNetwork === 'adsterra' ? 'monetag' : 'adsterra';
-    }
-  } else if (hasAdsterra) {
-    selectedNetwork = 'adsterra';
-  } else {
-    selectedNetwork = 'monetag';
+  // Find next ad
+  let nextIndex = config.lastAdIndex + 1;
+  if (nextIndex >= urls.length) {
+    nextIndex = 0;
   }
-
-  const targetUrl = selectedNetwork === 'adsterra' ? config.adsterraUrl : config.monetagUrl;
+  
+  const selectedAd = urls[nextIndex];
+  
+  // Apply rotation strategies if specific ones are chosen instead of cycle_all
+  let finalAd = selectedAd;
+  
+  if (config.rotationStrategy === 'adsterra_only') {
+    const adsterraUrls = urls.filter(u => u.type === 'adsterra');
+    if (adsterraUrls.length > 0) {
+      const idx = (config.lastAdIndex + 1) % adsterraUrls.length;
+      finalAd = adsterraUrls[idx];
+    }
+  } else if (config.rotationStrategy === 'monetag_only') {
+    const monetagUrls = urls.filter(u => u.type === 'monetag');
+    if (monetagUrls.length > 0) {
+      const idx = (config.lastAdIndex + 1) % monetagUrls.length;
+      finalAd = monetagUrls[idx];
+    }
+  } else if (config.rotationStrategy === 'random') {
+    const randomIndex = Math.floor(Math.random() * urls.length);
+    finalAd = urls[randomIndex];
+  }
 
   // Update counters and last served
   const updatedConfig: AdminAdConfig = {
     ...config,
-    lastServedNetwork: selectedNetwork,
-    adsterraImpressions:
-      selectedNetwork === 'adsterra'
-        ? config.adsterraImpressions + 1
-        : config.adsterraImpressions,
-    monetagImpressions:
-      selectedNetwork === 'monetag'
-        ? config.monetagImpressions + 1
-        : config.monetagImpressions,
+    lastAdIndex: nextIndex,
+    adsterraImpressions: finalAd.type === 'adsterra' ? config.adsterraImpressions + 1 : config.adsterraImpressions,
+    monetagImpressions: finalAd.type === 'monetag' ? config.monetagImpressions + 1 : config.monetagImpressions,
   };
-
   saveAdConfig(updatedConfig);
 
   // Open the chosen ad network direct link
-  openAdLink(targetUrl);
+  openAdLink(finalAd.url);
 
   return {
     served: true,
-    network: selectedNetwork,
-    url: targetUrl,
+    network: finalAd.type,
+    url: finalAd.url,
   };
 }

@@ -302,9 +302,15 @@ export default function App() {
 
   const handleTabSelect = (tab: NavTab) => {
     setActiveTab(tab);
-    if (tab === 'home') {
-      // close extra modals if any
-    } else if (tab === 'refer') {
+    
+    // Reset all tabs to false first
+    setIsReferOpen(false);
+    setIsTasksOpen(false);
+    setIsRankOpen(false);
+    setIsProfileOpen(false);
+    
+    // Open the selected tab's modal if it's not home
+    if (tab === 'refer') {
       setIsReferOpen(true);
     } else if (tab === 'earn') {
       setIsTasksOpen(true);
@@ -320,7 +326,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex justify-center font-sans selection:bg-indigo-100 selection:text-indigo-800">
       {/* Mobile Frame Container */}
-      <div className="w-full max-w-md min-h-screen relative flex flex-col bg-slate-50 text-slate-900 pb-24 shadow-xl border-x border-slate-200/80">
+      <div className="w-full max-w-md min-h-screen relative flex flex-col bg-[#f4f0ff] text-slate-900 pb-24 shadow-xl border-x border-slate-200/80">
         
         {/* Telegram Header Bar */}
         <TelegramHeader
@@ -355,20 +361,36 @@ export default function App() {
 
           {/* 2. Quick Action Squircles (Tasks, Videos, Refer, Withdraw) */}
           <QuickActions
-            onOpenTasks={() => setIsTasksOpen(true)}
+            onOpenTasks={() => handleTabSelect('earn')}
             onOpenVideos={() => {
               // Scroll to movies and clips section
               const el = document.getElementById('section-movies-clips');
               el?.scrollIntoView({ behavior: 'smooth' });
             }}
-            onOpenRefer={() => setIsReferOpen(true)}
+            onOpenRefer={() => handleTabSelect('refer')}
             onOpenWithdraw={() => setIsWithdrawOpen(true)}
             pendingTasksCount={pendingTasksCount}
             preferences={preferences}
           />
 
-          {/* 3. Daily Spin Wheel (Once every 24 hours with random prize & cooldown) */}
-          <DailySpinWheel onWinReward={handleSpinReward} preferences={preferences} />
+          {/* 3. Promo Banner */}
+          <div className="px-4 py-2">
+            <div className="bg-white rounded-full border-2 border-pink-400 p-2 pl-4 pr-3 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  <div className="w-6 h-6 rounded-full bg-pink-200 border border-white"></div>
+                  <div className="w-6 h-6 rounded-full bg-pink-300 border border-white"></div>
+                  <div className="w-6 h-6 rounded-full bg-pink-400 border border-white"></div>
+                </div>
+                <span className="font-black text-[17px] text-[#6b21a8]">অনলাইন ইনকাম</span>
+              </div>
+              <button className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 active:scale-95 transition-transform">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
 
           {/* 4. Movies & Clips Section */}
           <MoviesClipsSection
@@ -388,6 +410,10 @@ export default function App() {
           onClose={() => {
             setIsTasksOpen(false);
             if (activeTab === 'earn') setActiveTab('home');
+          }}
+          onNavigate={(tab) => {
+            setIsTasksOpen(false);
+            handleTabSelect(tab as NavTab);
           }}
           tasks={tasks}
           onCompleteTask={handleCompleteTask}
@@ -420,7 +446,6 @@ export default function App() {
             setIsRankOpen(false);
             if (activeTab === 'rank') setActiveTab('home');
           }}
-          ranks={INITIAL_LEADERBOARD}
         />
 
         <ProfileModal
@@ -430,6 +455,7 @@ export default function App() {
             if (activeTab === 'profile') setActiveTab('home');
           }}
           user={user}
+          withdrawals={withdrawals}
           onUpdatePhone={(phone) => setUser((prev) => ({ ...prev, phone }))}
           onOpenGuide={() => setIsGuideOpen(true)}
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
@@ -456,6 +482,9 @@ export default function App() {
           withdrawals={withdrawals}
           onApproveWithdrawal={handleApproveWithdrawal}
           onRejectWithdrawal={handleRejectWithdrawal}
+          videos={videos}
+          onAddVideo={(video) => setVideos((prev) => [video, ...prev])}
+          onDeleteVideo={(id) => setVideos((prev) => prev.filter((v) => v.id !== id))}
         />
 
         <BotSetupGuideModal

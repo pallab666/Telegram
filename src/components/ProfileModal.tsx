@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, User, Phone, Shield, BookOpen, ExternalLink, RefreshCw, Send, Check, Landmark, ArrowUpRight } from 'lucide-react';
-import { UserData } from '../types';
+import { X, Settings, History, Copy, Headphones, ChevronDown, MoreVertical } from 'lucide-react';
+import { UserData, WithdrawalRecord } from '../types';
 import { triggerHaptic } from '../utils/telegram';
 
 interface ProfileModalProps {
@@ -10,203 +10,164 @@ interface ProfileModalProps {
   onUpdatePhone: (phone: string) => void;
   onOpenGuide: () => void;
   onOpenWithdraw?: () => void;
+  withdrawals?: WithdrawalRecord[];
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
   onClose,
   user,
-  onUpdatePhone,
-  onOpenGuide,
   onOpenWithdraw,
 }) => {
-  const [phone, setPhone] = useState(user.phone || '');
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSavePhone = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdatePhone(phone);
-    setIsEditingPhone(false);
-    setSavedSuccess(true);
+  const handleCopyLink = () => {
     triggerHaptic('success');
-    setTimeout(() => setSavedSuccess(false), 2000);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 font-bold">
-              👤
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#f4f0ff] animate-in slide-in-from-bottom-2 sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden">
+      
+      {/* Top Purple Bar */}
+      <div className="bg-[#a855f7] px-4 py-2.5 flex items-center justify-between text-white shrink-0 shadow-sm relative z-20">
+        <button onClick={() => { triggerHaptic('light'); onClose(); }} className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors">
+          <X size={24} />
+        </button>
+        <div className="flex items-center gap-2 font-black text-[17px] tracking-wide">
+          🎁 Smart Earning 💸
+        </div>
+        <div className="flex items-center gap-1.5">
+          <ChevronDown size={24} className="opacity-80" />
+          <MoreVertical size={24} className="opacity-80" />
+        </div>
+      </div>
+
+      {/* Blue Profile Banner */}
+      <div className="bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#3b82f6] px-4 py-3 flex items-center justify-between shadow-md rounded-b-[1.5rem] relative z-10">
+        {/* Avatar */}
+        <div className="w-12 h-12 rounded-full border-2 border-[#fde047] overflow-hidden shadow-sm">
+          <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+        </div>
+        
+        {/* Online Status Pill */}
+        <div className="bg-[#1e3a8a]/40 text-[#fde047] text-[11px] font-black px-4 py-1.5 rounded-full flex items-center gap-2 border border-white/10 backdrop-blur-sm">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+          52 ONLINE
+        </div>
+        
+        {/* Settings Icon */}
+        <button className="w-11 h-11 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center justify-center border border-white/5 backdrop-blur-sm shadow-inner active:scale-95">
+          <Settings className="text-[#fde047] w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto w-full pb-28 pt-4">
+        
+        {/* Main Hero Card */}
+        <div className="bg-gradient-to-br from-[#7e22ce] via-[#8b5cf6] to-[#6b21a8] rounded-[2rem] p-6 shadow-xl shadow-purple-900/10 text-center relative mx-4 mb-5">
+          {/* Large Center Avatar */}
+          <div className="w-[100px] h-[100px] rounded-full border-4 border-white mx-auto overflow-hidden mb-3 shadow-lg">
+            <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+          </div>
+          
+          <h2 className="text-[30px] font-black text-white mb-2 leading-none drop-shadow-sm">{user.name}</h2>
+          
+          <div className="bg-white/20 text-white text-[13px] font-bold px-5 py-2 rounded-full inline-flex items-center gap-1.5 mb-5 backdrop-blur-sm border border-white/10 shadow-inner">
+            Balance <span className="text-[#4ade80] ml-1">৳ {user.balance.toFixed(2)}</span>
+          </div>
+          
+          {/* Stats Columns */}
+          <div className="bg-black/15 backdrop-blur-sm rounded-2xl p-4 flex justify-between items-center border border-white/5 shadow-inner">
+            <div className="text-center flex-1 border-r border-white/10">
+              <div className="text-[#fde047] text-2xl font-black leading-none mb-1">{user.referralsCount || 0}</div>
+              <div className="text-[10px] text-white/80 font-bold tracking-widest uppercase">Joined</div>
             </div>
-            <div>
-              <h3 className="font-bold text-white text-sm">আমার প্রোফাইল (My Profile)</h3>
-              <p className="text-[11px] text-slate-400">ইউজার একাউন্ট ও বিবরণ</p>
+            <div className="text-center flex-1 border-r border-white/10">
+              <div className="text-[#4ade80] text-2xl font-black leading-none mb-1">0</div>
+              <div className="text-[10px] text-white/80 font-bold tracking-widest uppercase">Active</div>
+            </div>
+            <div className="text-center flex-1">
+              <div className="text-[#ef4444] text-2xl font-black leading-none mb-1">0</div>
+              <div className="text-[10px] text-white/80 font-bold tracking-widest uppercase">Inactive</div>
             </div>
           </div>
-          <button
+        </div>
+
+        {/* Action Buttons Grid */}
+        <div className="flex gap-4 px-4 mb-5">
+          {/* Withdraw */}
+          <button 
             onClick={() => {
-              triggerHaptic('light');
-              onClose();
-            }}
-            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Profile Card Top */}
-        <div className="p-4 bg-slate-100 border-b border-slate-200 flex items-center space-x-3.5">
-          <div className="relative">
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-600 shadow-sm"
-            />
-            <div className="absolute -bottom-1 -right-1 bg-emerald-500 w-3.5 h-3.5 rounded-full border-2 border-white" />
-          </div>
-          <div className="min-w-0">
-            <h4 className="text-base font-bold text-slate-900 truncate">{user.name}</h4>
-            <p className="text-xs text-indigo-600 font-mono font-semibold">@{user.username || 'user'}</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">টেলিগ্রাম আইডি: {user.telegramId || '582910284'}</p>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="p-4 overflow-y-auto space-y-3 bg-slate-50">
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">বর্তমান ব্যালেন্স</span>
-              <div className="text-lg font-mono font-black text-indigo-600">
-                ৳{user.balance.toFixed(2)}
-              </div>
-            </div>
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">মোট উত্তোলন</span>
-              <div className="text-lg font-mono font-black text-emerald-600">
-                ৳{user.totalWithdrawn.toFixed(2)}
-              </div>
-            </div>
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">রেফারেল সংখ্যা</span>
-              <div className="text-lg font-mono font-black text-slate-900">
-                {user.referralsCount} জন
-              </div>
-            </div>
-            <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">রেফার কোড</span>
-              <div className="text-lg font-mono font-black text-indigo-600">
-                {user.referralCode}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Withdraw button */}
-          {onOpenWithdraw && (
-            <button
-              onClick={() => {
+              if(onOpenWithdraw) {
                 triggerHaptic('medium');
                 onClose();
                 onOpenWithdraw();
-              }}
-              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl flex items-center justify-between text-xs font-bold shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98] cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <Landmark className="w-4 h-4" />
-                <span>টাকা উত্তোলন করুন (Withdraw)</span>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] bg-white/20 px-2 py-0.5 rounded-lg">
-                <span>বিকাশ/নগদ</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </div>
-            </button>
-          )}
-
-          {/* Phone Number / bKash settings */}
-          <div className="p-3.5 bg-white border border-slate-200 rounded-2xl space-y-2 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                <Phone className="w-3.5 h-3.5 text-indigo-600" />
-                <span>মোবাইল নম্বর (বিকাশ/নগদ):</span>
-              </div>
-              {!isEditingPhone && (
-                <button
-                  onClick={() => setIsEditingPhone(true)}
-                  className="text-xs text-indigo-600 hover:text-indigo-700 font-bold"
-                >
-                  পরিবর্তন
-                </button>
-              )}
-            </div>
-
-            {isEditingPhone ? (
-              <form onSubmit={handleSavePhone} className="flex gap-2">
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="017XXXXXXXX"
-                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-600 font-mono"
-                  maxLength={11}
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
-                >
-                  সংরক্ষণ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingPhone(false)}
-                  className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl border border-slate-200 transition-colors"
-                >
-                  বাতিল
-                </button>
-              </form>
-            ) : (
-              <p className="text-xs text-slate-800 font-mono font-bold">{phone || 'নম্বর যোগ করা হয়নি'}</p>
-            )}
-
-            {savedSuccess && (
-              <p className="text-[11px] text-emerald-600 flex items-center gap-1 font-semibold">
-                <Check className="w-3 h-3" /> নম্বর সফলভাবে আপডেট হয়েছে!
-              </p>
-            )}
-          </div>
-
-          {/* Action to open the Bot Setup Guide */}
-          <button
-            onClick={() => {
-              triggerHaptic('medium');
-              onClose();
-              onOpenGuide();
-            }}
-            className="w-full p-3.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-2xl flex items-center justify-between text-left shadow-sm transition-all group"
-            id="btn-profile-bot-guide"
+              }
+            }} 
+            className="flex-1 bg-gradient-to-r from-[#ef4444] to-[#f59e0b] rounded-[1.5rem] p-4 flex flex-col items-center justify-center text-white shadow-lg shadow-orange-500/20 active:scale-95 transition-transform"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div>
-                <h5 className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                  এমন টেলিগ্রাম বট কীভাবে বানাবেন?
-                </h5>
-                <p className="text-[10px] text-slate-500">
-                  BotFather সেটআপ, কোড ও পূর্ণাঙ্গ নির্দেশিকা
-                </p>
-              </div>
+            <div className="w-8 h-8 mb-1.5 flex items-center justify-center">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <circle cx="12" cy="12" r="2" />
+                <path d="M6 12h.01M18 12h.01" />
+              </svg>
             </div>
-            <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+            <span className="font-black text-[15px]">Withdraw</span>
+          </button>
+          
+          {/* History */}
+          <button className="flex-1 bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] rounded-[1.5rem] p-4 flex flex-col items-center justify-center text-white shadow-lg shadow-blue-500/20 active:scale-95 transition-transform">
+            <History className="w-8 h-8 mb-1.5" strokeWidth={2.5} />
+            <span className="font-black text-[15px]">History</span>
           </button>
         </div>
+
+        {/* Invite Link Card */}
+        <div className="mx-4 bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100 relative overflow-hidden mb-6">
+          {/* Decorative background shape */}
+          <div className="absolute -right-6 -top-6 text-[#f4f0ff]">
+            <svg width="100" height="100" viewBox="0 0 100 100" fill="currentColor">
+              <circle cx="50" cy="50" r="40" opacity="0.5" />
+              <circle cx="70" cy="30" r="20" />
+            </svg>
+          </div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e]"></div>
+              <h3 className="text-[#1e3a8a] font-black text-lg">Your Invite Link</h3>
+            </div>
+            
+            <div className="bg-slate-50 rounded-xl p-3 pr-24 relative border border-slate-200">
+              <div className="text-xs text-slate-500 truncate w-full font-mono font-medium">
+                https://t.me/smarterning15_bot/...
+              </div>
+              <button 
+                onClick={handleCopyLink}
+                className="absolute right-1.5 top-1.5 bottom-1.5 bg-[#6366f1] hover:bg-[#4f46e5] text-white text-xs font-bold px-4 rounded-lg flex items-center gap-1.5 transition-colors active:scale-95 shadow-sm"
+              >
+                <Copy className="w-3.5 h-3.5" /> {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Floating Support FAB */}
+      <div className="fixed bottom-[88px] left-4 z-40">
+        <button 
+          onClick={() => triggerHaptic('light')}
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-[#6366f1] to-[#a855f7] border-[3px] border-white shadow-xl shadow-indigo-500/30 flex items-center justify-center text-white active:scale-95 transition-transform"
+        >
+          <Headphones className="w-6 h-6" strokeWidth={2.5} />
+        </button>
+      </div>
+
     </div>
   );
 };

@@ -27,10 +27,11 @@ import {
   ArrowDownToLine,
   RefreshCw,
   Send,
+  Play,
 } from 'lucide-react';
 import { AdminAdConfig, getAdConfig, saveAdConfig } from '../utils/adManager';
 import { triggerHaptic, openAdLink } from '../utils/telegram';
-import { WithdrawalRecord } from '../types';
+import { WithdrawalRecord, VideoClip } from '../types';
 import { playAppSound } from '../utils/preferences';
 
 interface AdminPanelModalProps {
@@ -41,6 +42,9 @@ interface AdminPanelModalProps {
   withdrawals: WithdrawalRecord[];
   onApproveWithdrawal: (id: string, trxId?: string) => void;
   onRejectWithdrawal: (id: string, reason?: string) => void;
+  videos?: VideoClip[];
+  onAddVideo?: (video: VideoClip) => void;
+  onDeleteVideo?: (id: string) => void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -51,6 +55,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   withdrawals,
   onApproveWithdrawal,
   onRejectWithdrawal,
+  videos = [],
+  onAddVideo,
+  onDeleteVideo,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
@@ -60,13 +67,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newPin, setNewPin] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
-  // Admin section tabs: 'withdrawals' | 'ads'
-  const [adminTab, setAdminTab] = useState<'withdrawals' | 'ads'>('withdrawals');
+  // Admin section tabs: 'withdrawals' | 'ads' | 'videos'
+  const [adminTab, setAdminTab] = useState<'withdrawals' | 'ads' | 'videos'>('withdrawals');
 
   // Withdrawals management state
   const [statusFilter, setStatusFilter] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Video management state
+  const [newVideoTitle, setNewVideoTitle] = useState('');
+  const [newVideoDesc, setNewVideoDesc] = useState('');
+  const [newVideoThumb, setNewVideoThumb] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
 
   // Inline approval / rejection forms
   const [activeApprovalId, setActiveApprovalId] = useState<string | null>(null);
@@ -113,7 +126,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
     const currentConfig = getAdConfig();
-    const targetPin = currentConfig.adminPin || '7788';
+    const targetPin = currentConfig.adminPin || '3048';
 
     if (enteredPin.trim() === targetPin.trim()) {
       triggerHaptic('success');
@@ -319,7 +332,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {pinError && (
                 <div className="flex items-center justify-center gap-1.5 text-xs text-rose-600 font-bold animate-in fade-in">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>ভুল পিন! সঠিক পিন দিন (ডিফল্ট: 7788)</span>
+                  <span>ভুল পিন! সঠিক পিন দিন</span>
                 </div>
               )}
 
@@ -331,13 +344,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <span>লগইন করুন (Unlock)</span>
               </button>
             </form>
-
-            <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-center text-xs text-amber-800 max-w-xs">
-              <span className="font-bold">🔑 ডিফল্ট অ্যাডমিন পিন: </span>
-              <span className="font-mono font-black text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
-                7788
-              </span>
-            </div>
           </div>
         ) : (
           /* AUTHENTICATED ADMIN DASHBOARD */
@@ -349,14 +355,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   triggerHaptic('light');
                   setAdminTab('withdrawals');
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 pb-2.5 pt-1 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'withdrawals'
                     ? 'border-emerald-500 text-emerald-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Landmark className="w-3.5 h-3.5" />
-                <span>উত্তোলন অনুমোদন (Withdraw)</span>
+                <span>উত্তোলন</span>
                 {pendingRequests.length > 0 && (
                   <span className="text-[10px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded-full animate-pulse">
                     {pendingRequests.length}
@@ -369,14 +375,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   triggerHaptic('light');
                   setAdminTab('ads');
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 pb-2.5 pt-1 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'ads'
                     ? 'border-amber-500 text-amber-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>অ্যাড ও সেটিংস (Ads & Config)</span>
+                <span>অ্যাড ও সেটিংস</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setAdminTab('videos');
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                  adminTab === 'videos'
+                    ? 'border-pink-500 text-pink-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>ভিডিও আপলোড</span>
               </button>
             </div>
 
@@ -760,7 +781,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   )}
                 </div>
               </div>
-            ) : (
+            ) : adminTab === 'ads' ? (
               /* TAB 2: ADS & SYSTEM CONFIGURATION */
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
                 {/* Success Banner */}
@@ -798,16 +819,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </span>
                     </div>
 
-                    {/* Adsterra Link */}
+                    {/* Adsterra Link 1 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-orange-500" />
-                          <span>Adsterra Direct Link:</span>
+                          <span>Adsterra Direct Link 1:</span>
                         </label>
                         <button
                           type="button"
-                          onClick={() => testLink(config.adsterraUrl)}
+                          onClick={() => testLink(config.adsterraUrl1)}
                           className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded cursor-pointer"
                         >
                           <ExternalLink className="w-2.5 h-2.5" />
@@ -816,23 +837,48 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </div>
                       <input
                         type="url"
-                        value={config.adsterraUrl}
-                        onChange={(e) => setConfig({ ...config, adsterraUrl: e.target.value })}
+                        value={config.adsterraUrl1 || ''}
+                        onChange={(e) => setConfig({ ...config, adsterraUrl1: e.target.value })}
+                        placeholder="https://www.profitablecpmrate.com/..."
+                        className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    
+                    {/* Adsterra Link 2 */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-orange-400" />
+                          <span>Adsterra Direct Link 2:</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => testLink(config.adsterraUrl2)}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded cursor-pointer"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>টেস্ট লিংক</span>
+                        </button>
+                      </div>
+                      <input
+                        type="url"
+                        value={config.adsterraUrl2 || ''}
+                        onChange={(e) => setConfig({ ...config, adsterraUrl2: e.target.value })}
                         placeholder="https://www.profitablecpmrate.com/..."
                         className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
 
-                    {/* Monetag Link */}
+                    {/* Monetag Link 1 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span>Monetag Direct Link / SmartLink:</span>
+                          <span>Monetag Direct Link 1:</span>
                         </label>
                         <button
                           type="button"
-                          onClick={() => testLink(config.monetagUrl)}
+                          onClick={() => testLink(config.monetagUrl1)}
                           className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded cursor-pointer"
                         >
                           <ExternalLink className="w-2.5 h-2.5" />
@@ -841,8 +887,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </div>
                       <input
                         type="url"
-                        value={config.monetagUrl}
-                        onChange={(e) => setConfig({ ...config, monetagUrl: e.target.value })}
+                        value={config.monetagUrl1 || ''}
+                        onChange={(e) => setConfig({ ...config, monetagUrl1: e.target.value })}
+                        placeholder="https://otieuhoo.net/... বা https://monetag.com/..."
+                        className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    
+                    {/* Monetag Link 2 */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-400" />
+                          <span>Monetag Direct Link 2:</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => testLink(config.monetagUrl2)}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded cursor-pointer"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>টেস্ট লিংক</span>
+                        </button>
+                      </div>
+                      <input
+                        type="url"
+                        value={config.monetagUrl2 || ''}
+                        onChange={(e) => setConfig({ ...config, monetagUrl2: e.target.value })}
                         placeholder="https://otieuhoo.net/... বা https://monetag.com/..."
                         className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
@@ -856,18 +927,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setConfig({ ...config, rotationStrategy: 'alternate' })}
+                          onClick={() => setConfig({ ...config, rotationStrategy: 'cycle_all' })}
                           className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            config.rotationStrategy === 'alternate'
+                            config.rotationStrategy === 'cycle_all'
                               ? 'border-indigo-600 bg-indigo-50/80 text-indigo-950 font-bold ring-1 ring-indigo-500'
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
                           <div className="text-xs font-bold flex items-center gap-1">
-                            <span>🔄 অল্টারনেট (50/50)</span>
+                            <span>🔄 সাইকেল (সবগুলো)</span>
                           </div>
                           <div className="text-[10px] text-slate-500 mt-0.5">
-                            ১ম Adsterra, ২য় Monetag (সেরা)
+                            ৪টি লিংকেই সমান্তরাল ভিজিট যাবে
                           </div>
                         </button>
 
@@ -1037,11 +1108,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         maxLength={10}
                         value={newPin}
                         onChange={(e) => setNewPin(e.target.value)}
-                        placeholder={`বর্তমান পিন: ${config.adminPin || '7788'} (নতুন পিন দিতে পারেন)`}
+                        placeholder={`বর্তমান পিন: ${config.adminPin || '3048'} (নতুন পিন দিতে পারেন)`}
                         className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
                       />
                       <p className="text-[10px] text-slate-500">
-                        খালি রাখলে আগের পিন ({config.adminPin || '7788'}) বহাল থাকবে।
+                        খালি রাখলে আগের পিন ({config.adminPin || '3048'}) বহাল থাকবে।
                       </p>
                     </div>
                   </div>
@@ -1057,6 +1128,121 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </button>
                   </div>
                 </form>
+              </div>
+            ) : (
+              /* TAB 3: VIDEOS MANAGEMENT */
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
+                
+                {/* Upload New Video Form */}
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <Play className="w-4 h-4 text-pink-500 fill-pink-500" />
+                    নতুন ভিডিও আপলোড করুন
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Title (টাইটেল)</label>
+                      <input 
+                        type="text" 
+                        value={newVideoTitle}
+                        onChange={(e) => setNewVideoTitle(e.target.value)}
+                        placeholder="e.g. নতুন ভিডিও!"
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Description (বিবরণ)</label>
+                      <textarea 
+                        value={newVideoDesc}
+                        onChange={(e) => setNewVideoDesc(e.target.value)}
+                        placeholder="Write a short description..."
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none min-h-[60px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Thumbnail URL</label>
+                      <input 
+                        type="text" 
+                        value={newVideoThumb}
+                        onChange={(e) => setNewVideoThumb(e.target.value)}
+                        placeholder="https://example.com/thumb.jpg"
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Video/Task URL</label>
+                      <input 
+                        type="text" 
+                        value={newVideoUrl}
+                        onChange={(e) => setNewVideoUrl(e.target.value)}
+                        placeholder="https://example.com/video"
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        if (!newVideoTitle || !newVideoThumb || !newVideoUrl) {
+                          onShowToast('Title, Thumbnail, and URL are required');
+                          return;
+                        }
+                        triggerHaptic('medium');
+                        if (onAddVideo) {
+                          onAddVideo({
+                            id: Date.now().toString(),
+                            title: newVideoTitle,
+                            duration: 60,
+                            reward: 5,
+                            thumbnailUrl: newVideoThumb,
+                            videoUrl: newVideoUrl,
+                            watched: false,
+                            category: 'all',
+                            views: '0'
+                          });
+                          setNewVideoTitle('');
+                          setNewVideoDesc('');
+                          setNewVideoThumb('');
+                          setNewVideoUrl('');
+                          onShowToast('Video added successfully!');
+                        }
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-transform cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>ভিডিও যুক্ত করুন (Add Video)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Existing Videos List */}
+                <div className="space-y-3">
+                  <h3 className="font-bold text-slate-800 text-sm">সকল ভিডিও ({videos.length})</h3>
+                  {videos.map((vid) => (
+                    <div key={vid.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+                      <img src={vid.thumbnailUrl} alt={vid.title} className="w-16 h-12 object-cover rounded-md bg-slate-200" />
+                      <div className="flex-1 overflow-hidden">
+                        <h4 className="text-xs font-bold text-slate-800 truncate">{vid.title}</h4>
+                        <p className="text-[10px] text-slate-500 truncate">{vid.videoUrl}</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          triggerHaptic('medium');
+                          if (onDeleteVideo) onDeleteVideo(vid.id);
+                        }}
+                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {videos.length === 0 && (
+                    <div className="text-center py-6 text-slate-400 text-xs font-semibold">
+                      কোনো ভিডিও নেই।
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>

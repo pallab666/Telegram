@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { X, Check, ExternalLink, CalendarCheck, Send, Youtube, Facebook, HelpCircle, Sparkles } from 'lucide-react';
+import { X, Check, Globe, Link2, Send, ChevronDown, MoreVertical, Settings, Play, Briefcase, Clock, Zap } from 'lucide-react';
 import { EarnTask } from '../types';
 import { triggerHaptic } from '../utils/telegram';
+import confetti from 'canvas-confetti';
 
 interface TasksModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onNavigate?: (tab: string) => void;
   tasks: EarnTask[];
   onCompleteTask: (taskId: string, reward: number) => void;
   dailyCheckedIn: boolean;
@@ -14,28 +16,17 @@ interface TasksModalProps {
 export const TasksModal: React.FC<TasksModalProps> = ({
   isOpen,
   onClose,
+  onNavigate,
   tasks,
   onCompleteTask,
   dailyCheckedIn,
 }) => {
-  const [quizAnswer, setQuizAnswer] = useState('');
-  const [quizError, setQuizError] = useState(false);
-  const [showQuiz, setShowQuiz] = useState(false);
-
-  // Simple math quiz: 23 + 17 = 40
-  const num1 = 23;
-  const num2 = 17;
-  const correctAnswer = num1 + num2; // 40
+  const [activeTab, setActiveTab] = useState<'visit' | 'special'>('visit');
 
   if (!isOpen) return null;
 
   const handleTaskClick = (task: EarnTask) => {
     if (task.completed) return;
-
-    if (task.iconType === 'quiz') {
-      setShowQuiz(true);
-      return;
-    }
 
     triggerHaptic('medium');
     if (task.link) {
@@ -46,153 +37,218 @@ export const TasksModal: React.FC<TasksModalProps> = ({
       }
     }
 
-    // Award task reward
+    // Simulate ad watch or task completion
     setTimeout(() => {
       onCompleteTask(task.id, task.reward);
+    }, 1500);
+  };
+
+  const handleWatchAd = () => {
+    triggerHaptic('success');
+    confetti({ particleCount: 60, spread: 50, origin: { y: 0.6 }, zIndex: 9999 });
+    // Simulate watching an ad
+    setTimeout(() => {
+      onCompleteTask('watch_ad_bonus', 10.00);
     }, 1000);
   };
 
-  const handleQuizSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (parseInt(quizAnswer.trim(), 10) === correctAnswer) {
-      triggerHaptic('success');
-      setQuizError(false);
-      setShowQuiz(false);
-      onCompleteTask('task_math_quiz', 3.50);
-    } else {
-      triggerHaptic('warning');
-      setQuizError(true);
+  const renderIcon = (type: string, isCompleted: boolean) => {
+    if (isCompleted) {
+      return <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-400"><Check size={18} /></div>;
+    }
+    
+    switch (type) {
+      case 'telegram':
+        return <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><Send size={18} /></div>;
+      case 'youtube':
+        return <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500"><Play size={18} fill="currentColor" /></div>;
+      case 'checkin':
+        return <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><Globe size={18} /></div>;
+      default:
+        return <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-500"><Link2 size={18} /></div>;
     }
   };
 
-  const getTaskIcon = (type: EarnTask['iconType']) => {
-    switch (type) {
-      case 'checkin':
-        return <CalendarCheck className="w-5 h-5 text-emerald-400" />;
-      case 'telegram':
-        return <Send className="w-5 h-5 text-blue-400" />;
-      case 'youtube':
-        return <Youtube className="w-5 h-5 text-red-500" />;
-      case 'facebook':
-        return <Facebook className="w-5 h-5 text-blue-500" />;
-      case 'quiz':
-        return <HelpCircle className="w-5 h-5 text-amber-400" />;
-      default:
-        return <Sparkles className="w-5 h-5 text-purple-400" />;
+  // Generate some extra visual tasks if the list is short to match the screenshot vibe
+  const displayTasks = [...tasks];
+  if (displayTasks.length < 10) {
+    for (let i = displayTasks.length; i < 12; i++) {
+      displayTasks.push({
+        id: `mock_task_${i}`,
+        title: `Visit Job ${i + 1}`,
+        titleBn: `ভিজিট করুন ${i + 1}`,
+        reward: 30.00,
+        iconType: i % 4 === 0 ? 'telegram' : 'quiz',
+        category: 'visit',
+        completed: false
+      });
     }
-  };
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 font-bold">
-              📋
-            </div>
-            <div>
-              <h3 className="font-bold text-white text-sm">দৈনিক টাস্ক সেন্টার (Tasks)</h3>
-              <p className="text-[11px] text-slate-400">টাস্ক পূরণ করুন ও ব্যালেন্স বৃদ্ধি করুন</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              triggerHaptic('light');
-              onClose();
-            }}
-            className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#eef2ff] animate-in slide-in-from-bottom-2 sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden">
+      
+      {/* Top Status Bar (Purple) */}
+      <div className="bg-[#a855f7] px-4 py-2.5 flex items-center justify-between text-white shrink-0 shadow-sm relative z-20">
+        <button onClick={() => { triggerHaptic('light'); onClose(); }} className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors">
+          <X size={24} />
+        </button>
+        <div className="flex items-center gap-2 font-black text-lg tracking-wide">
+          🎁 Smart Earning 💸
         </div>
+        <div className="flex items-center gap-1.5">
+          <ChevronDown size={24} className="opacity-80" />
+          <MoreVertical size={24} className="opacity-80" />
+        </div>
+      </div>
 
-        {/* Task list body */}
-        <div className="p-4 overflow-y-auto space-y-2.5 bg-slate-50">
-          {showQuiz && (
-            <div className="p-4 bg-white border border-slate-200 rounded-2xl mb-3 space-y-3 shadow-sm">
-              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                <HelpCircle className="w-4 h-4 text-indigo-600" />
-                <span>গণিত কুইজ সমাধান করুন:</span>
-              </h4>
-              <p className="text-slate-900 text-base font-mono font-black text-center bg-slate-100 py-2 rounded-xl border border-slate-200">
-                {num1} + {num2} = ?
-              </p>
-              <form onSubmit={handleQuizSubmit} className="space-y-2">
-                <input
-                  type="number"
-                  placeholder="আপনার উত্তর দিন..."
-                  value={quizAnswer}
-                  onChange={(e) => setQuizAnswer(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-indigo-600"
-                />
-                {quizError && (
-                  <p className="text-xs text-rose-500 font-semibold">ভুল উত্তর! আবার চেষ্টা করুন।</p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors"
-                  >
-                    জমা দিন (+৳3.50 BDT)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowQuiz(false)}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors"
-                  >
-                    বাতিল
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+      {/* Profile Bar (Blue) */}
+      <div className="bg-gradient-to-b from-[#3b82f6] to-[#60a5fa] px-4 py-3 flex items-center justify-between text-white rounded-b-3xl shrink-0 shadow-md relative z-10">
+        <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-white/30 bg-blue-300 shadow-inner">
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" className="w-full h-full object-cover" />
+        </div>
+        <div className="bg-white/20 backdrop-blur-md rounded-full px-4 py-1.5 flex items-center gap-2 border border-white/10 shadow-inner">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#4ade80] shadow-[0_0_8px_#4ade80] animate-pulse"></div>
+          <span className="text-xs font-black tracking-widest uppercase">49 Online</span>
+        </div>
+        <button className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner">
+          <Settings size={20} className="text-yellow-300" />
+        </button>
+      </div>
 
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                task.completed
-                  ? 'bg-slate-100/80 border-slate-200 opacity-60'
-                  : 'bg-white hover:border-indigo-200 border-slate-200 shadow-sm'
-              }`}
-            >
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                  {getTaskIcon(task.iconType)}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto w-full pb-20">
+        <div className="px-4 py-6">
+          
+          {/* HERO CARD - Watch Ads & Earn */}
+          <div className="bg-gradient-to-br from-[#8b5cf6] via-[#c026d3] to-[#d946ef] rounded-[2rem] p-6 shadow-xl shadow-purple-500/20 text-center relative overflow-hidden mb-6 border border-purple-400/30">
+            {/* Background floating money elements (implied) */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-fuchsia-500/20 rounded-full blur-2xl -ml-10 -mb-10" />
+            
+            <div className="relative z-10 flex flex-col items-center">
+              {/* Giant Coin Icon */}
+              <div className="w-24 h-24 rounded-full border-4 border-yellow-200/50 bg-gradient-to-b from-yellow-100 to-yellow-300 flex items-center justify-center shadow-[0_0_30px_rgba(253,224,71,0.5)] mb-4 relative">
+                <div className="w-16 h-16 bg-[#854d0e] rounded-full flex items-center justify-center">
+                  <span className="text-4xl font-black text-yellow-400">$</span>
                 </div>
-                <div className="min-w-0">
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-800 truncate">
-                    {task.titleBn || task.title}
-                  </h4>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[11px] font-extrabold text-emerald-600">
-                      +৳{task.reward.toFixed(2)} BDT
-                    </span>
-                    <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">
-                      {task.category}
-                    </span>
-                  </div>
+                <div className="absolute -bottom-2 -right-2 bg-[#4ade80] text-white text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-purple-600 shadow-sm">
+                  $$$
                 </div>
               </div>
 
-              {task.completed ? (
-                <div className="flex items-center gap-1 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>সম্পন্ন</span>
+              <h2 className="text-[26px] font-black text-white mb-4 drop-shadow-md tracking-tight">Watch Ads & Earn</h2>
+              
+              {/* Dark Info Box */}
+              <div className="bg-black/20 backdrop-blur-md rounded-2xl p-3 flex flex-col items-center border border-white/10 shadow-inner w-[85%] mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-white font-bold text-xs">Per Ad Reward:</span>
+                  <span className="bg-[#4ade80] text-emerald-950 px-2 py-0.5 rounded-full text-xs font-black">৳10.0000</span>
                 </div>
-              ) : (
-                <button
-                  onClick={() => handleTaskClick(task)}
-                  className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition-transform active:scale-95 flex-shrink-0"
-                  id={`btn-do-task-${task.id}`}
-                >
-                  <span>শুরু করুন</span>
-                  {task.link && <ExternalLink className="w-3 h-3" />}
-                </button>
-              )}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 bg-yellow-700 rounded-full"></div>
+                  </div>
+                  <span className="text-yellow-400 font-bold text-[10px] tracking-widest uppercase">Daily Limit: <span className="text-white">0 / 300</span></span>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button 
+                onClick={handleWatchAd}
+                className="w-full bg-gradient-to-b from-[#fef08a] via-[#fde047] to-[#eab308] shadow-[0_6px_0_#ca8a04] rounded-2xl py-3.5 flex items-center justify-center gap-2 transition-all active:shadow-[0_0px_0_#ca8a04] active:translate-y-1.5"
+              >
+                <div className="w-6 h-6 rounded-full bg-purple-900 flex items-center justify-center pl-0.5">
+                  <Play className="text-yellow-400" size={14} fill="currentColor" />
+                </div>
+                <span className="text-purple-900 font-black text-lg tracking-wide uppercase">Watch Ad Now</span>
+              </button>
             </div>
-          ))}
+          </div>
+
+          {/* TWO TABS */}
+          <div className="flex gap-3 mb-6">
+            <button 
+              onClick={() => setActiveTab('visit')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm shadow-md transition-all ${
+                activeTab === 'visit' 
+                ? 'bg-gradient-to-b from-[#3b82f6] to-[#1d4ed8] text-white border border-blue-400 shadow-blue-500/30' 
+                : 'bg-white text-slate-500 border border-slate-200'
+              }`}
+            >
+              <Globe size={18} /> Visit Jobs
+            </button>
+            <button 
+              onClick={() => setActiveTab('special')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm shadow-md transition-all ${
+                activeTab === 'special' 
+                ? 'bg-gradient-to-b from-[#3b82f6] to-[#1d4ed8] text-white border border-blue-400 shadow-blue-500/30' 
+                : 'bg-white text-slate-500 border border-slate-200'
+              }`}
+            >
+              <Briefcase size={18} /> Special Jobs
+            </button>
+          </div>
+
+          {/* TASKS LIST */}
+          <div className="space-y-3.5">
+            {displayTasks.map((task, index) => (
+              <div 
+                key={task.id} 
+                className={`relative bg-gradient-to-r from-[#fefce8] to-[#fffbeb] rounded-[1.25rem] p-3.5 flex items-center justify-between border-2 transition-all ${
+                  task.completed ? 'opacity-60 border-slate-200 grayscale-[0.5]' : 'border-[#fde047] shadow-sm hover:shadow-md'
+                }`}
+              >
+                {!task.completed && (
+                  <div className="absolute top-0 right-3 -translate-y-1/2 bg-[#ef4444] text-white px-1.5 py-0.5 rounded shadow-sm text-[8px] font-black uppercase tracking-wider">
+                    HOT
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-3.5">
+                  {renderIcon(task.iconType, task.completed)}
+                  
+                  <div className="flex flex-col">
+                    <span className="font-black text-slate-800 text-[15px] mb-0.5">
+                      {task.titleBn}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#10b981] font-black text-[13px]">+৳{task.reward.toFixed(2)}</span>
+                      <div className="flex items-center gap-0.5 text-slate-400">
+                        {task.iconType === 'telegram' ? (
+                          <Zap size={10} className="text-blue-500" />
+                        ) : (
+                          <Clock size={10} />
+                        )}
+                        <span className="text-[10px] font-bold">{task.iconType === 'telegram' ? 'Instant' : index === 0 ? '150s' : '60s'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handleTaskClick(task)}
+                  disabled={task.completed}
+                  className={`px-4 py-2 rounded-full font-black text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-90 ${
+                    task.completed
+                    ? 'bg-slate-200 text-slate-500 border-slate-300'
+                    : task.iconType === 'telegram'
+                      ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                      : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                  }`}
+                >
+                  {task.completed ? (
+                    'Done'
+                  ) : task.iconType === 'telegram' ? (
+                    <>+ Join</>
+                  ) : (
+                    <>Start <Play size={10} fill="currentColor" /></>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+
         </div>
       </div>
     </div>
