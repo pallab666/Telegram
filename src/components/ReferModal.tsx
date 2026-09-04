@@ -27,7 +27,7 @@ import {
 import confetti from "canvas-confetti";
 import { triggerHaptic } from "../utils/telegram";
 import { playAppSound } from "../utils/preferences";
-import { getSystemSettings } from "../utils/systemSettings";
+import { getSystemSettings, buildReferralLink } from "../utils/systemSettings";
 import { ReferredUser } from "../types";
 
 interface ReferModalProps {
@@ -173,25 +173,7 @@ export const ReferModal: React.FC<ReferModalProps> = ({
 
   if (!isOpen) return null;
 
-  const sysSettings = getSystemSettings();
-  const rawBot = sysSettings.telegramBotUsername || "SmartEarning_BDT_bot";
-  const cleanBot = rawBot.replace(/^@/, "").trim() || "SmartEarning_BDT_bot";
-  const shortName = (sysSettings.miniAppShortName || "app").trim();
-  const linkFormat = sysSettings.referralLinkFormat || "mini_app";
-
-  let botInviteLink = `https://t.me/${cleanBot}/${shortName}?startapp=${referralCode}`;
-
-  if (linkFormat === 'web_url') {
-    const baseUrl = (sysSettings.customWebUrl && sysSettings.customWebUrl.trim())
-      ? sysSettings.customWebUrl.trim().replace(/\/$/, '')
-      : (typeof window !== 'undefined' ? window.location.origin : 'https://ais-pre-ggdb4cv4g7cfbb3xlhcvwn-374535181190.asia-southeast1.run.app');
-    botInviteLink = `${baseUrl}?ref=${referralCode}`;
-  } else if (linkFormat === 'bot_start') {
-    botInviteLink = `https://t.me/${cleanBot}?start=${referralCode}`;
-  } else {
-    // mini_app (Direct Telegram Mini App Link)
-    botInviteLink = `https://t.me/${cleanBot}/${shortName}?startapp=${referralCode}`;
-  }
+  const botInviteLink = buildReferralLink(referralCode);
   
   // Calculations based on the anti-fraud rules
   const totalReferrals = referrals.length;

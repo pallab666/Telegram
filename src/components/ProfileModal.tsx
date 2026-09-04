@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { UserData, WithdrawalRecord } from "../types";
 import { triggerHaptic } from "../utils/telegram";
+import { buildReferralLink } from "../utils/systemSettings";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -38,7 +39,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   if (!isOpen) return null;
 
+  const inviteLink = buildReferralLink(user.referralCode);
+
   const handleCopyLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+    }
     triggerHaptic("success");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -215,8 +221,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
 
             <div className="bg-slate-50 rounded-xl p-3 pr-24 relative border border-slate-200">
-              <div className="text-xs text-slate-500 truncate w-full font-mono font-medium">
-                https://t.me/smarterning15_bot/...
+              <div className="text-xs text-slate-500 truncate w-full font-mono font-medium select-all">
+                {inviteLink}
               </div>
               <button
                 onClick={handleCopyLink}

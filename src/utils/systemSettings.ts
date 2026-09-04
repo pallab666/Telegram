@@ -120,3 +120,23 @@ export async function fetchSystemSettingsFromServer(): Promise<SystemSettings> {
   }
   return getSystemSettings();
 }
+
+export function buildReferralLink(referralCode: string): string {
+  const sysSettings = getSystemSettings();
+  const rawBot = sysSettings.telegramBotUsername || "SmartEarning_BDT_bot";
+  const cleanBot = rawBot.replace(/^@/, "").trim() || "SmartEarning_BDT_bot";
+  const shortName = (sysSettings.miniAppShortName || "app").trim();
+  const linkFormat = sysSettings.referralLinkFormat || "web_url";
+
+  if (linkFormat === 'web_url') {
+    const baseUrl = (sysSettings.customWebUrl && sysSettings.customWebUrl.trim())
+      ? sysSettings.customWebUrl.trim().replace(/\/$/, '')
+      : (typeof window !== 'undefined' ? window.location.origin : 'https://ais-pre-ggdb4cv4g7cfbb3xlhcvwn-374535181190.asia-southeast1.run.app');
+    return `${baseUrl}?ref=${referralCode}`;
+  } else if (linkFormat === 'bot_start') {
+    return `https://t.me/${cleanBot}?start=${referralCode}`;
+  } else {
+    // mini_app (Direct Telegram Mini App Link)
+    return `https://t.me/${cleanBot}/${shortName}?startapp=${referralCode}`;
+  }
+}
