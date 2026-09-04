@@ -20,6 +20,9 @@ interface ProfileModalProps {
   onOpenGuide: () => void;
   onOpenWithdraw?: () => void;
   withdrawals?: WithdrawalRecord[];
+  onlineCount?: number;
+  onOpenSettings?: () => void;
+  language?: 'bn' | 'en';
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -27,6 +30,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
   user,
   onOpenWithdraw,
+  onlineCount = 1,
+  onOpenSettings,
+  language = 'bn',
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -78,12 +84,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
         {/* Online Status Pill */}
         <div className="bg-[#1e3a8a]/40 text-[#fde047] text-[11px] font-black px-4 py-1.5 rounded-full flex items-center gap-2 border border-white/10 backdrop-blur-sm">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
-          52 ONLINE
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+          </span>
+          {onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}
         </div>
 
         {/* Settings Icon */}
-        <button className="w-11 h-11 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center justify-center border border-white/5 backdrop-blur-sm shadow-inner active:scale-95">
+        <button
+          onClick={onOpenSettings}
+          className="w-11 h-11 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center justify-center border border-white/5 backdrop-blur-sm shadow-inner active:scale-95"
+        >
           <Settings className="text-[#fde047] w-5 h-5" />
         </button>
       </div>

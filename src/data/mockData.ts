@@ -67,63 +67,7 @@ export const INITIAL_TASKS: EarnTask[] = [
   },
 ];
 
-export const INITIAL_VIDEOS: VideoClip[] = [
-  {
-    id: 'vid_1',
-    title: '🔥 Dhaka Metro Rail Drone Cinematic Clip',
-    category: 'funny',
-    duration: 15,
-    reward: 2.50,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1517524008697-84bbe3c3fd98?auto=format&fit=crop&q=80&w=400',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-city-traffic-at-night-41544-large.mp4',
-    views: '45.2K',
-    watched: false,
-  },
-  {
-    id: 'vid_2',
-    title: '🎬 Top Bengali Movie Action Scene 2026',
-    category: 'movies',
-    duration: 20,
-    reward: 3.00,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&q=80&w=400',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-sunset-26070-large.mp4',
-    views: '88.1K',
-    watched: false,
-  },
-  {
-    id: 'vid_3',
-    title: '📱 New Smartphone Unboxing & Marketing Review',
-    category: 'movies',
-    duration: 25,
-    reward: 4.00,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=400',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-hands-holding-a-smartphone-with-a-green-screen-41223-large.mp4',
-    views: '23.4K',
-    watched: false,
-  },
-  {
-    id: 'vid_4',
-    title: '😂 Best Bangladeshi Comedy Short Reel',
-    category: 'funny',
-    duration: 15,
-    reward: 2.00,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1527525443983-6e60c75fff46?auto=format&fit=crop&q=80&w=400',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-friends-laughing-together-outdoors-42416-large.mp4',
-    views: '112.5K',
-    watched: false,
-  },
-  {
-    id: 'vid_5',
-    title: '🏖️ Cox\'s Bazar Sunset Wave 4K Experience',
-    category: 'all',
-    duration: 30,
-    reward: 5.00,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=400',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-waves-coming-to-the-beach-5016-large.mp4',
-    views: '64.9K',
-    watched: false,
-  },
-];
+export const INITIAL_VIDEOS: VideoClip[] = [];
 
 export const INITIAL_LEADERBOARD: LeaderboardRank[] = [
   {

@@ -24,6 +24,10 @@ interface ReferModalProps {
   onClose: () => void;
   referralCode: string;
   referralsCount: number;
+  onlineCount?: number;
+  userAvatar?: string;
+  onOpenSettings?: () => void;
+  language?: 'bn' | 'en';
 }
 
 const REWARD_TIERS = [
@@ -100,6 +104,10 @@ export const ReferModal: React.FC<ReferModalProps> = ({
   onClose,
   referralCode,
   referralsCount,
+  onlineCount = 1,
+  userAvatar,
+  onOpenSettings,
+  language = 'bn',
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -170,18 +178,24 @@ export const ReferModal: React.FC<ReferModalProps> = ({
       <div className="bg-gradient-to-b from-[#3b82f6] to-[#60a5fa] px-4 py-3 flex items-center justify-between text-white rounded-b-3xl shrink-0 shadow-md relative z-10">
         <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-white/30 bg-blue-300 shadow-inner">
           <img
-            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
+            src={userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"}
             alt="avatar"
             className="w-full h-full object-cover"
           />
         </div>
         <div className="bg-white/20 backdrop-blur-md rounded-full px-4 py-1.5 flex items-center gap-2 border border-white/10 shadow-inner">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#4ade80] shadow-[0_0_8px_#4ade80] animate-pulse"></div>
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#4ade80] shadow-[0_0_8px_#4ade80]"></span>
+          </span>
           <span className="text-xs font-black tracking-widest uppercase">
-            33 Online
+            {onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}
           </span>
         </div>
-        <button className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner">
+        <button
+          onClick={onOpenSettings}
+          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner"
+        >
           <Settings size={20} className="text-yellow-300" />
         </button>
       </div>

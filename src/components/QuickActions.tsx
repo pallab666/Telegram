@@ -154,7 +154,6 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
             {isBn ? "উত্তোলন" : "Withdraw"}
           </span>
         </motion.button>
-      </div>
       </motion.div>
     </div>
   );

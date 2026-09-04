@@ -1,11 +1,12 @@
 import React from "react";
-import { Settings, BookOpen, Lock } from "lucide-react";
+import { Settings, Lock } from "lucide-react";
 import { UserData } from "../types";
 import { triggerHaptic } from "../utils/telegram";
 
 interface TelegramHeaderProps {
   user: UserData;
   onlineCount: number;
+  language?: 'bn' | 'en';
   onOpenSettings: () => void;
   onOpenAdmin?: () => void;
   onOpenGuide: () => void;
@@ -16,6 +17,7 @@ interface TelegramHeaderProps {
 export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
   user,
   onlineCount,
+  language = 'bn',
   onOpenSettings,
   onOpenAdmin,
   onOpenGuide,
@@ -51,20 +53,6 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* How to build bot guide button */}
-          <button
-            onClick={() => {
-              triggerHaptic("medium");
-              onOpenGuide();
-            }}
-            className="flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg transition-all"
-            title="কীভাবে এই বট বানাবেন (Bot Tutorial)"
-            id="btn-bot-guide"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-semibold text-[11px]">কীভাবে বানাবেন?</span>
-          </button>
-
           <button
             onClick={onOpenSettings}
             className="text-slate-400 hover:text-white p-1"
@@ -109,14 +97,18 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
           </div>
         </button>
 
-        {/* Online status indicator - Professional pulse pill */}
+        {/* Online status indicator - Real-time pulse pill */}
         <div
           id="badge-online-users"
-          className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full shadow-sm"
+          className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full shadow-xs"
+          title={language === 'bn' ? `রিয়েল-টাইম একটিভ: ${onlineCount} জন লাইভ` : `Real-time Active: ${onlineCount} online`}
         >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-            {onlineCount} ONLINE
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+            {onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}
           </span>
         </div>
 

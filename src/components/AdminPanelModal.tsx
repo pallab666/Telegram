@@ -46,6 +46,7 @@ interface AdminPanelModalProps {
   videos?: VideoClip[];
   onAddVideo?: (video: VideoClip) => void;
   onDeleteVideo?: (id: string) => void;
+  onlineCount?: number;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -59,6 +60,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   videos = [],
   onAddVideo,
   onDeleteVideo,
+  onlineCount = 1,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
@@ -81,6 +83,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newVideoDesc, setNewVideoDesc] = useState('');
   const [newVideoThumb, setNewVideoThumb] = useState('');
   const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [newVideoCategory, setNewVideoCategory] = useState<'all' | 'movies' | 'funny' | 'music' | 'gaming' | 'news'>('movies');
+  const [newVideoReward, setNewVideoReward] = useState('3.00');
+  const [newVideoDuration, setNewVideoDuration] = useState('20');
 
   // Inline approval / rejection forms
   const [activeApprovalId, setActiveApprovalId] = useState<string | null>(null);
@@ -407,34 +412,52 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               /* TAB 1: WITHDRAWALS MANAGEMENT & APPROVAL */
               <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
                 {/* Stats Summary Cards */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100/60 border border-amber-200/80 rounded-2xl">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2.5 bg-gradient-to-br from-amber-50 to-amber-100/60 border border-amber-200/80 rounded-2xl">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">
-                        পেন্ডিং রিকোয়েস্ট
+                      <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wider">
+                        পেন্ডিং
                       </span>
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                     </div>
-                    <div className="text-lg font-black text-amber-950 font-mono mt-0.5">
+                    <div className="text-base font-black text-amber-950 font-mono mt-0.5">
                       {pendingRequests.length} টি
                     </div>
-                    <p className="text-[10px] text-amber-700 font-semibold font-mono">
-                      মোট ৳{pendingTotal.toFixed(2)} BDT
+                    <p className="text-[9px] text-amber-700 font-semibold font-mono truncate">
+                      ৳{pendingTotal.toFixed(0)}
                     </p>
                   </div>
 
-                  <div className="p-3 bg-gradient-to-br from-emerald-50 to-emerald-100/60 border border-emerald-200/80 rounded-2xl">
+                  <div className="p-2.5 bg-gradient-to-br from-emerald-50 to-emerald-100/60 border border-emerald-200/80 rounded-2xl">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                        পরিশোধিত (Approved)
+                      <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">
+                        পরিশোধিত
                       </span>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                     </div>
-                    <div className="text-lg font-black text-emerald-950 font-mono mt-0.5">
+                    <div className="text-base font-black text-emerald-950 font-mono mt-0.5">
                       {approvedRequests.length} টি
                     </div>
-                    <p className="text-[10px] text-emerald-700 font-semibold font-mono">
-                      মোট ৳{approvedTotal.toFixed(2)} BDT
+                    <p className="text-[9px] text-emerald-700 font-semibold font-mono truncate">
+                      ৳{approvedTotal.toFixed(0)}
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 bg-gradient-to-br from-indigo-50 to-indigo-100/60 border border-indigo-200/80 rounded-2xl">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold text-indigo-800 uppercase tracking-wider">
+                        অনলাইন
+                      </span>
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    </div>
+                    <div className="text-base font-black text-indigo-950 font-mono mt-0.5">
+                      {onlineCount} জন
+                    </div>
+                    <p className="text-[9px] text-indigo-700 font-semibold truncate">
+                      লাইভ রিয়েল-টাইম
                     </p>
                   </div>
                 </div>
@@ -844,7 +867,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         className="w-full text-xs font-mono py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
-                    </div>
                     {/* Adsterra Link 2 */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
@@ -951,8 +973,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">🎲 র‍্যান্ডম (Random)
-                          <div className="text-[10px] text-slate-500 mt-0.5">৫০% র‍্যান্ডম সুযোগ
+                          <div className="text-xs font-bold">🎲 র‍্যান্ডম (Random)</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">৫০% র‍্যান্ডম সুযোগ</div>
                         </button>
 
                         <button
@@ -964,7 +986,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">🅰️ শুধু Adsterra
+                          <div className="text-xs font-bold">🅰️ শুধু Adsterra</div>
                         </button>
 
                         <button
@@ -976,7 +998,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-xs font-bold">Ⓜ️ শুধু Monetag
+                          <div className="text-xs font-bold">Ⓜ️ শুধু Monetag</div>
                         </button>
                       </div>
                     </div>
@@ -1132,85 +1154,127 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ) : (
               /* TAB 3: VIDEOS MANAGEMENT */
               <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
-                </div>
                 {/* Upload New Video Form */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                   <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                     <Play className="w-4 h-4 text-pink-500 fill-pink-500" />
                     নতুন ভিডিও আপলোড করুন
                   </h3>
-                  </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Title (টাইটেল)</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Title (ভিডিওর শিরোনাম * )</label>
                       <input 
                         type="text" 
                         value={newVideoTitle}
                         onChange={(e) => setNewVideoTitle(e.target.value)}
-                        placeholder="e.g. নতুন ভিডিও!"
+                        placeholder="e.g. নতুন বাংলা কমেডি ক্লিপ"
                         className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Description (বিবরণ)</label>
-                      <textarea 
-                        value={newVideoDesc}
-                        onChange={(e) => setNewVideoDesc(e.target.value)}
-                        placeholder="Write a short description..."
-                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none min-h-[60px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Thumbnail URL</label>
-                      <input 
-                        type="text" 
-                        value={newVideoThumb}
-                        onChange={(e) => setNewVideoThumb(e.target.value)}
-                        placeholder="https://example.com/thumb.jpg"
-                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Video/Task URL</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Video URL (ভিডিও লিংক * )</label>
                       <input 
                         type="text" 
                         value={newVideoUrl}
                         onChange={(e) => setNewVideoUrl(e.target.value)}
-                        placeholder="https://example.com/video"
+                        placeholder="e.g. https://www.youtube.com/watch?v=... বা mp4 লিংক"
                         className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
                       />
                     </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">ক্যাটাগরি</label>
+                        <select
+                          value={newVideoCategory}
+                          onChange={(e) => setNewVideoCategory(e.target.value as any)}
+                          className="w-full text-xs py-2 px-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                        >
+                          <option value="movies">Movies & Clips</option>
+                          <option value="funny">Funny Shorts</option>
+                          <option value="music">Music Videos</option>
+                          <option value="gaming">Gaming</option>
+                          <option value="news">Trending News</option>
+                          <option value="all">All Videos</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">পুরস্কার (৳ BDT)</label>
+                        <input 
+                          type="number" 
+                          step="0.5"
+                          value={newVideoReward}
+                          onChange={(e) => setNewVideoReward(e.target.value)}
+                          placeholder="3.00"
+                          className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">সময় (সেকেন্ড)</label>
+                        <input 
+                          type="number" 
+                          value={newVideoDuration}
+                          onChange={(e) => setNewVideoDuration(e.target.value)}
+                          placeholder="20"
+                          className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Thumbnail URL (ঐচ্ছিক - খালি রাখলে অটোমেটিক সেট হবে)
+                      </label>
+                      <input 
+                        type="text" 
+                        value={newVideoThumb}
+                        onChange={(e) => setNewVideoThumb(e.target.value)}
+                        placeholder="https://... (ইউটিউব হলে অটো নিবে)"
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                      />
                     </div>
                     <button
                       onClick={() => {
-                        if (!newVideoTitle || !newVideoThumb || !newVideoUrl) {
-                          onShowToast('Title, Thumbnail, and URL are required');
+                        const trimmedTitle = newVideoTitle.trim();
+                        const trimmedUrl = newVideoUrl.trim();
+                        if (!trimmedTitle || !trimmedUrl) {
+                          onShowToast('❌ ভিডিওর শিরোনাম এবং লিংক পূরণ করুন');
                           return;
                         }
+
+                        // Auto generate thumbnail if not provided
+                        let finalThumb = newVideoThumb.trim();
+                        if (!finalThumb) {
+                          const ytMatch = trimmedUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/);
+                          if (ytMatch && ytMatch[1]) {
+                            finalThumb = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+                          } else {
+                            finalThumb = 'https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?auto=format&fit=crop&q=80&w=400';
+                          }
+                        }
+
                         triggerHaptic('medium');
                         if (onAddVideo) {
                           onAddVideo({
                             id: Date.now().toString(),
-                            title: newVideoTitle,
-                            duration: 60,
-                            reward: 5,
-                            thumbnailUrl: newVideoThumb,
-                            videoUrl: newVideoUrl,
+                            title: trimmedTitle,
+                            duration: Number(newVideoDuration) || 20,
+                            reward: Number(newVideoReward) || 3.0,
+                            thumbnailUrl: finalThumb,
+                            videoUrl: trimmedUrl,
                             watched: false,
-                            category: 'all',
+                            category: newVideoCategory,
                             views: '0'
                           });
                           setNewVideoTitle('');
                           setNewVideoDesc('');
                           setNewVideoThumb('');
                           setNewVideoUrl('');
-                          onShowToast('Video added successfully!');
+                          onShowToast('✅ নতুন ভিডিও সফলভাবে যুক্ত করা হয়েছে!');
                         }
                       }}
                       className="w-full py-2.5 px-4 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-transform cursor-pointer"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>ভিডিও যুক্ত করুন (Add Video)</span>
+                      <span>ভিডিও যুক্ত করুন (Publish Video)</span>
                     </button>
                   </div>
                 </div>
@@ -1248,6 +1312,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { motion } from "motion/react";
-import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Film } from "lucide-react";
 import { VideoClip } from "../types";
 import { triggerHaptic } from "../utils/telegram";
 
@@ -97,9 +97,15 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
       {/* 2. Video Grid */}
       <div className="grid grid-cols-2 gap-3 pt-1">
         {filteredVideos.length === 0 ? (
-          <div className="col-span-2 flex flex-col items-center justify-center py-10 text-slate-400 space-y-2 bg-white rounded-[1.5rem] border border-dashed border-slate-300">
-            <p className="text-xs font-semibold text-slate-500">
-              Loading videos...
+          <div className="col-span-2 flex flex-col items-center justify-center py-10 px-4 text-center space-y-2 bg-white rounded-[1.5rem] border border-dashed border-slate-300 shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+              <Film className="w-6 h-6 text-slate-400" />
+            </div>
+            <p className="text-xs font-bold text-slate-700">
+              বর্তমানে কোনো ভিডিও নেই
+            </p>
+            <p className="text-[11px] text-slate-500 max-w-[240px]">
+              অ্যাডমিন প্যানেল থেকে ভিডিও যুক্ত করা হলে এখানে সবাই দেখতে পাবে।
             </p>
           </div>
         ) : (
@@ -121,20 +127,26 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
                 />
                 <div className="absolute inset-0 bg-black/30" />
 
-                {/* Demo Avail. Badge */}
-                <div className="absolute top-1.5 right-1.5 bg-black text-white text-[9px] font-black px-2 py-0.5 rounded-full border border-white/20">
-                  Demo Avail.
+                {/* Reward Badge */}
+                <div className="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                  +৳{(video.reward || 3).toFixed(1)}
                 </div>
 
+                {video.watched && (
+                  <div className="absolute top-1.5 left-1.5 bg-black/70 backdrop-blur-xs text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-emerald-500/30">
+                    <span>✓ দেখা হয়েছে</span>
+                  </div>
+                )}
+
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-10 h-10 rounded-full bg-red-600 border-[3px] border-white flex items-center justify-center shadow-lg">
+                  <div className="w-10 h-10 rounded-full bg-red-600 border-[3px] border-white flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                     <Play className="w-4 h-4 text-white fill-white ml-0.5" />
                   </div>
                 </div>
               </div>
 
               {/* Title area */}
-              <div className="bg-gradient-to-b from-[#1e3a8a] to-[#1e40af] p-2 flex items-center justify-center flex-1">
+              <div className="bg-gradient-to-b from-[#1e3a8a] to-[#1e40af] p-2.5 flex items-center justify-center flex-1">
                 <h4 className="font-black text-[10px] text-center text-white leading-tight line-clamp-2 uppercase">
                   {video.title}
                 </h4>

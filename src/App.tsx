@@ -26,6 +26,7 @@ import {
   hasCompletedInitialSetup,
   markInitialSetupCompleted,
 } from './utils/preferences';
+import { initPresenceTracker } from './utils/presence';
 import { Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -65,11 +66,45 @@ export default function App() {
       const stored = localStorage.getItem('smart_earning_videos');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Remove legacy dummy videos
+          const cleaned = parsed.filter(
+            (v: any) => !['vid_1', 'vid_2', 'vid_3', 'vid_4', 'vid_5'].includes(v.id)
+          );
+          return cleaned;
+        }
       }
     } catch (e) {}
-    return INITIAL_VIDEOS;
+    return [];
   });
+
+  // Fetch shared videos from server so all users see admin-added videos
+  useEffect(() => {
+    const fetchSharedVideos = async () => {
+      try {
+        const res = await fetch('/api/videos');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.videos)) {
+            setVideos((prev) => {
+              const watchedMap = new Set(prev.filter((p) => p.watched).map((p) => p.id));
+              return data.videos.map((vid: VideoClip) => ({
+                ...vid,
+                watched: watchedMap.has(vid.id) || Boolean(vid.watched),
+              }));
+            });
+            localStorage.setItem('smart_earning_videos', JSON.stringify(data.videos));
+          }
+        }
+      } catch (e) {
+        // Network fallback
+      }
+    };
+
+    fetchSharedVideos();
+    const interval = setInterval(fetchSharedVideos, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('smart_earning_videos', JSON.stringify(videos));
@@ -103,7 +138,7 @@ export default function App() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [onlineCount, setOnlineCount] = useState<number>(20);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
 
   // Modals
   const [isTasksOpen, setIsTasksOpen] = useState(false);
@@ -150,15 +185,19 @@ export default function App() {
       }));
     }
 
-    // Dynamic online counter fluctuation
-    const interval = setInterval(() => {
-      setOnlineCount((prev) => {
-        const delta = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-        return Math.max(18, Math.min(32, prev + delta));
-      });
-    }, 8000);
+    // Real-time online users presence tracking
+    const cleanupPresence = initPresenceTracker({
+      userId: tgUser?.id ? String(tgUser.id) : user.telegramId ? String(user.telegramId) : user.username,
+      username: tgUser?.username || user.username,
+      name: tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : user.name,
+      onCountChange: (count) => {
+        setOnlineCount(count);
+      },
+    });
 
-    return () => clearInterval(interval);
+    return () => {
+      cleanupPresence();
+    };
   }, []);
 
   // Save user data
@@ -309,8 +348,48 @@ export default function App() {
   const handleResetData = () => {
     setUser(INITIAL_USER);
     setTasks(INITIAL_TASKS);
-    setVideos(INITIAL_VIDEOS);
+    setVideos([]);
+    localStorage.removeItem('smart_earning_videos');
     showToast('ডাটা সফলভাবে রিসেট করা হয়েছে');
+  };
+
+  const handleAdminAddVideo = async (video: VideoClip) => {
+    // Immediate optimistic update
+    setVideos((prev) => [video, ...prev.filter((v) => v.id !== video.id)]);
+    try {
+      const res = await fetch('/api/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(video),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.videos)) {
+          setVideos(data.videos);
+          localStorage.setItem('smart_earning_videos', JSON.stringify(data.videos));
+        }
+      }
+    } catch (err) {
+      console.error('Error saving video to server:', err);
+    }
+  };
+
+  const handleAdminDeleteVideo = async (id: string) => {
+    setVideos((prev) => prev.filter((v) => v.id !== id));
+    try {
+      const res = await fetch(`/api/videos/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.videos)) {
+          setVideos(data.videos);
+          localStorage.setItem('smart_earning_videos', JSON.stringify(data.videos));
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting video on server:', err);
+    }
   };
 
   const handleTabSelect = (tab: NavTab) => {
@@ -345,6 +424,7 @@ export default function App() {
         <TelegramHeader
           user={user}
           onlineCount={onlineCount}
+          language={preferences.language}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}
           onOpenGuide={() => setIsGuideOpen(true)}
@@ -431,6 +511,10 @@ export default function App() {
           tasks={tasks}
           onCompleteTask={handleCompleteTask}
           dailyCheckedIn={user.dailyCheckedIn}
+          onlineCount={onlineCount}
+          userAvatar={user.avatarUrl}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          language={preferences.language}
         />
 
         <WithdrawModal
@@ -441,6 +525,7 @@ export default function App() {
           withdrawals={withdrawals}
           onRequestWithdraw={handleRequestWithdraw}
           preferences={preferences}
+          onlineCount={onlineCount}
         />
 
         <ReferModal
@@ -451,6 +536,10 @@ export default function App() {
           }}
           referralCode={user.referralCode}
           referralsCount={user.referralsCount}
+          onlineCount={onlineCount}
+          userAvatar={user.avatarUrl}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          language={preferences.language}
         />
 
         <RankModal
@@ -459,6 +548,10 @@ export default function App() {
             setIsRankOpen(false);
             if (activeTab === 'rank') setActiveTab('home');
           }}
+          onlineCount={onlineCount}
+          userAvatar={user.avatarUrl}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          language={preferences.language}
         />
 
         <ProfileModal
@@ -472,6 +565,9 @@ export default function App() {
           onUpdatePhone={(phone) => setUser((prev) => ({ ...prev, phone }))}
           onOpenGuide={() => setIsGuideOpen(true)}
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
+          onlineCount={onlineCount}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          language={preferences.language}
         />
 
         <SettingsModal
@@ -496,8 +592,9 @@ export default function App() {
           onApproveWithdrawal={handleApproveWithdrawal}
           onRejectWithdrawal={handleRejectWithdrawal}
           videos={videos}
-          onAddVideo={(video) => setVideos((prev) => [video, ...prev])}
-          onDeleteVideo={(id) => setVideos((prev) => prev.filter((v) => v.id !== id))}
+          onAddVideo={handleAdminAddVideo}
+          onDeleteVideo={handleAdminDeleteVideo}
+          onlineCount={onlineCount}
         />
 
         <BotSetupGuideModal
@@ -511,6 +608,7 @@ export default function App() {
           onClose={() => setActiveVideo(null)}
           onClaimReward={handleClaimVideoReward}
           preferences={preferences}
+          onlineCount={onlineCount}
         />
 
         {/* Initial Setup Modal (Language & Currency selection on first launch or via Settings) */}
