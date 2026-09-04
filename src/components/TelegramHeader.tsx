@@ -26,45 +26,6 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
 }) => {
   return (
     <header className="w-full select-none" id="telegram-header">
-      {/* Top simulated Telegram Mini App bar - sleek executive slate */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800 text-white text-sm">
-        <button
-          onClick={() => {
-            triggerHaptic("light");
-            if (window.Telegram?.WebApp?.close) {
-              window.Telegram.WebApp.close();
-            } else {
-              window.history.back();
-            }
-          }}
-          className="text-slate-400 hover:text-white transition-colors p-1"
-          title="Close Mini App"
-          aria-label="Close"
-          id="btn-close-app"
-        >
-          <span className="text-lg font-bold leading-none">✕</span>
-        </button>
-
-        <div className="flex items-center gap-2 font-bold text-sm tracking-tight text-white">
-          <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-sm">
-            S
-          </div>
-          <span>Smart Earning BD</span>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={onOpenSettings}
-            className="text-slate-400 hover:text-white p-1"
-            title="Options"
-            aria-label="Options"
-            id="btn-header-options"
-          >
-            <span className="text-lg leading-none font-bold">⋮</span>
-          </button>
-        </div>
-      </div>
-
       {/* Hero bar with Avatar, Online status pill, and Settings button */}
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-slate-200 shadow-sm">
         {/* User Avatar with refined border */}
