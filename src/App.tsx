@@ -103,7 +103,7 @@ export default function App() {
   useEffect(() => {
     const fetchSharedTasks = async () => {
       try {
-        const res = await fetch('/api/tasks');
+        const res = await fetch(`/api/tasks?t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.success && Array.isArray(data.tasks) && data.tasks.length > 0) {
@@ -148,7 +148,7 @@ export default function App() {
   useEffect(() => {
     const fetchSharedVideos = async () => {
       try {
-        const res = await fetch('/api/videos');
+        const res = await fetch(`/api/videos?t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.videos)) {
@@ -303,6 +303,11 @@ export default function App() {
       if (tgUser && tgUser.id) {
         registerTelegramUserOnServer(tgUser);
         setUser((prev) => {
+          // Only update if it's not already synced or if it's a completely new user
+          if (prev.telegramId === tgUser.id && prev.name !== 'ইউজার' && prev.name !== 'মেম্বার ইউজার') {
+             // Already synced and has a real name, don't overwrite if they edited it manually
+             return prev;
+          }
           const fullName = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || 'মেম্বার ইউজার';
           const currentHasTelegramId = prev.referralCode && prev.referralCode.includes(String(tgUser.id));
           const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829' && currentHasTelegramId)
@@ -322,12 +327,21 @@ export default function App() {
             referralCode: newRefCode,
           };
         });
+        return true; // indicates success
       }
+      return false;
     };
 
-    syncTgUser();
-    const tgInterval = setInterval(syncTgUser, 500);
-    const tgTimeout = setTimeout(() => clearInterval(tgInterval), 5000);
+    let tgInterval: ReturnType<typeof setInterval>;
+    if (!syncTgUser()) {
+      let attempts = 0;
+      tgInterval = setInterval(() => {
+        attempts++;
+        if (syncTgUser() || attempts > 20) { // Try for 10 seconds (20 * 500ms)
+          clearInterval(tgInterval);
+        }
+      }, 500);
+    }
 
     const tgUser = getTelegramUser();
 
@@ -346,7 +360,6 @@ export default function App() {
 
     return () => {
       clearInterval(tgInterval);
-      clearTimeout(tgTimeout);
       cleanupPresence();
     };
   }, []);
@@ -374,11 +387,28 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && data.success && Array.isArray(data.referrals)) {
-            setReferrals(data.referrals);
-            setUser((prev) => ({
-              ...prev,
-              referralsCount: data.referrals.length,
-            }));
+            setReferrals((prevReferrals) => {
+              // Find new referrals that we haven't seen locally yet
+              const existingIds = new Set(prevReferrals.map((r) => r.id));
+              const newReferrals = data.referrals.filter((r: any) => !existingIds.has(r.id));
+              
+              const newVerifiedCount = newReferrals.filter((r: any) => r.status === 'verified').length;
+              if (newVerifiedCount > 0) {
+                const bonus = newVerifiedCount * 100;
+                setUser((prev) => ({
+                  ...prev,
+                  balance: Math.round((prev.balance + bonus) * 100) / 100,
+                  totalEarned: Math.round((prev.totalEarned + bonus) * 100) / 100,
+                  referralsCount: data.referrals.length,
+                }));
+              } else if (data.referrals.length !== prevReferrals.length) {
+                setUser((prev) => ({
+                  ...prev,
+                  referralsCount: data.referrals.length,
+                }));
+              }
+              return data.referrals;
+            });
           }
         }
       } catch (e) {

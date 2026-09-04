@@ -1,4 +1,6 @@
+import os
 
+server_ts = """
 import "dotenv/config";
 import express from "express";
 import path from "path";
@@ -12,7 +14,7 @@ try {
   const rawConfig = fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf-8");
   const firebaseConfig = JSON.parse(rawConfig);
   const firebaseApp = initializeApp(firebaseConfig);
-  db = firebaseConfig.firestoreDatabaseId ? getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId) : getFirestore(firebaseApp);
+  db = getFirestore(firebaseApp);
 } catch (e) {
   console.error("Firebase config missing", e);
 }
@@ -317,59 +319,19 @@ async function startServer() {
   });
 
   // Leaderboard
-  app.post("/api/leaderboard/sync", async (req, res) => {
-    let body = req.body;
-    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
-    const { id, name, username, avatar, earnings, referrals, tasksCompleted } = body || {};
-    if (!id) return res.status(400).json({ success: false });
-
+  app.get("/api/leaderboard", async (req, res) => {
     const leaderboard = await getStoredData('leaderboard', []);
-    const existingIdx = leaderboard.findIndex((u: any) => u.id === id);
-    
-    const userData = {
-      id,
-      name: name || "Unknown",
-      username: username || "",
-      avatar: avatar || "",
-      earnings: Number(earnings) || 0,
-      referrals: Number(referrals) || 0,
-      tasksCompleted: Number(tasksCompleted) || 0,
-      lastActive: Date.now()
-    };
-
-    if (existingIdx >= 0) {
-      leaderboard[existingIdx] = { ...leaderboard[existingIdx], ...userData };
-    } else {
-      leaderboard.push(userData);
-    }
-
-    await saveStoredData('leaderboard', leaderboard);
-    res.json({ success: true });
+    res.json({ success: true, leaderboard });
   });
 
-  app.get("/api/leaderboard", async (req, res) => {
-    const { category, period, userId } = req.query;
-    const leaderboard = await getStoredData('leaderboard', []);
-    
-    // Sort based on category
-    let sorted = [...leaderboard];
-    if (category === "earnings") {
-      sorted.sort((a, b) => (b.earnings || 0) - (a.earnings || 0));
-    } else if (category === "unlocks") {
-      sorted.sort((a, b) => (b.tasksCompleted || 0) - (a.tasksCompleted || 0));
-    } else {
-      // Default to Top Refs
-      sorted.sort((a, b) => (b.referrals || 0) - (a.referrals || 0));
+  app.post("/api/leaderboard", async (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+    if (body && Array.isArray(body.leaderboard)) {
+      await saveStoredData('leaderboard', body.leaderboard);
+      return res.json({ success: true, leaderboard: body.leaderboard });
     }
-
-    // Create rankings list
-    const rankings = sorted.map((u, idx) => ({
-      ...u,
-      rank: idx + 1,
-      isCurrentUser: u.id === userId
-    }));
-
-    res.json({ success: true, rankings });
+    return res.status(400).json({ success: false });
   });
 
   // Referrals
@@ -394,11 +356,11 @@ async function startServer() {
         name: String(name).trim(),
         username: username ? (username.startsWith("@") ? username : `@${username}`) : "@user",
         joinedDate: new Date().toLocaleDateString("bn-BD"),
-        daysActive: 3,
-        tasksCompleted: 20,
-        status: "verified",
+        daysActive: 1,
+        tasksCompleted: 1,
+        status: "pending",
         rewardAmount: 100,
-        isTransferredToMain: true,
+        isTransferredToMain: false,
         createdAt: Date.now(),
       });
     }
@@ -446,24 +408,11 @@ async function startServer() {
 
     let text = "";
     if (type === "task") {
-      text = `<b>🔥 নতুন ইনকাম টাস্ক যুক্ত হয়েছে! (New Task Alert)</b>
-
-<b>📌 শিরোনাম:</b> ${title || "নতুন টাস্ক"}
-<b>💰 রিওয়ার্ড:</b> ৳${reward ? Number(reward).toFixed(2) : "2.50"} BDT
-
-🚀 এখনই অ্যাপটি চালু করে টাস্ক সম্পন্ন করুন এবং ইনস্ট্যান্ট ক্যাশ ইনকাম করুন!`;
+      text = `<b>🔥 নতুন ইনকাম টাস্ক যুক্ত হয়েছে! (New Task Alert)</b>\n\n<b>📌 শিরোনাম:</b> ${title || "নতুন টাস্ক"}\n<b>💰 রিওয়ার্ড:</b> ৳${reward ? Number(reward).toFixed(2) : "2.50"} BDT\n\n🚀 এখনই অ্যাপটি চালু করে টাস্ক সম্পন্ন করুন এবং ইনস্ট্যান্ট ক্যাশ ইনকাম করুন!`;
     } else if (type === "video") {
-      text = `<b>🎬 নতুন মুভি/ক্লিপ ভিডিও যুক্ত হয়েছে! (New Video)</b>
-
-<b>📌 ভিডিও শিরোনাম:</b> ${title || "নতুন ভিডিও"}
-<b>🎁 বোনাস:</b> ৳${reward ? Number(reward).toFixed(2) : "3.00"} BDT
-
-▶️ সম্পূর্ণ ভিডিও দেখে ক্যাশ টাকা অ্যাকাউন্টে যোগ করে নিন!`;
+      text = `<b>🎬 নতুন মুভি/ক্লিপ ভিডিও যুক্ত হয়েছে! (New Video)</b>\n\n<b>📌 ভিডিও শিরোনাম:</b> ${title || "নতুন ভিডিও"}\n<b>🎁 বোনাস:</b> ৳${reward ? Number(reward).toFixed(2) : "3.00"} BDT\n\n▶️ সম্পূর্ণ ভিডিও দেখে ক্যাশ টাকা অ্যাকাউন্টে যোগ করে নিন!`;
     } else {
-      text = `<b>📢 অফিশিয়াল ঘোষণা (Announcement)</b>
-
-<b>${title || "জরুরি আপডেট"}</b>
-${message || "স্মার্ট আর্নিং বিডি অ্যাপে নতুন আপডেট এসেছে।"}`;
+      text = `<b>📢 অফিশিয়াল ঘোষণা (Announcement)</b>\n\n<b>${title || "জরুরি আপডেট"}</b>\n${message || "স্মার্ট আর্নিং বিডি অ্যাপে নতুন আপডেট এসেছে।"}`;
     }
 
     let dispatchedCount = 0;
@@ -505,3 +454,8 @@ ${message || "স্মার্ট আর্নিং বিডি অ্যা
 }
 
 startServer();
+"""
+
+with open("server.ts", "w") as f:
+    f.write(server_ts)
+

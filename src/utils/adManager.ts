@@ -81,7 +81,7 @@ export function saveAdConfig(config: AdminAdConfig): void {
 export async function syncAdConfigFromServer(): Promise<AdminAdConfig> {
   if (typeof window === 'undefined') return DEFAULT_AD_CONFIG;
   try {
-    const res = await fetch('/api/ad-config');
+    const res = await fetch(`/api/ad-config?t=${Date.now()}`);
     if (res.ok) {
       const data = await res.json();
       if (data && data.config) {

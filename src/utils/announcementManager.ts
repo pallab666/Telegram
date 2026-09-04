@@ -62,7 +62,7 @@ export function saveLocalAnnouncement(announcement: BroadcastAnnouncement) {
 
 export async function fetchAnnouncementFromServer(): Promise<BroadcastAnnouncement> {
   try {
-    const res = await fetch("/api/announcement");
+    const res = await fetch(`/api/announcement?t=${Date.now()}`);
     if (res.ok) {
       const data = await res.json();
       if (data && data.announcement) {
