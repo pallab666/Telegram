@@ -13,6 +13,9 @@ export interface SystemSettings {
   telegramBotToken?: string;
   telegramBotUsername?: string;
   telegramChannelUsername?: string;
+  referralLinkFormat?: 'bot_start' | 'mini_app' | 'web_url';
+  miniAppShortName?: string;
+  customWebUrl?: string;
   notifyOnNewTask?: boolean;
   notifyOnNewVideo?: boolean;
   enabledMethods: {
@@ -41,8 +44,11 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   adminSupportUsername: "@SmartEarningSupport",
   howToWorkVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   telegramBotToken: "",
-  telegramBotUsername: "SmartEarning_bot",
+  telegramBotUsername: "SmartEarning_BDT_bot",
   telegramChannelUsername: "@SmartEarningBdOfficial",
+  referralLinkFormat: "web_url",
+  miniAppShortName: "app",
+  customWebUrl: "https://ais-pre-ggdb4cv4g7cfbb3xlhcvwn-374535181190.asia-southeast1.run.app",
   notifyOnNewTask: true,
   notifyOnNewVideo: true,
   enabledMethods: {

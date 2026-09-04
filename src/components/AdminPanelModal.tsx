@@ -2320,6 +2320,118 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       />
                     </div>
 
+                    {/* Referral Link Type Selector */}
+                    <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-200/80 space-y-2">
+                      <label className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">
+                        🔗 রেফারেল লিংক টাইপ (ইউজারদের জন্য কোন লিংক তৈরি হবে?)
+                      </label>
+
+                      <div className="space-y-1.5">
+                        <label className="flex items-start gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="referralLinkFormat"
+                            checked={(sysSettings.referralLinkFormat || 'mini_app') === 'web_url'}
+                            onChange={() =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                referralLinkFormat: 'web_url',
+                              }))
+                            }
+                            className="mt-0.5 accent-amber-600 cursor-pointer"
+                          />
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800 block">🌐 ডাইরেক্ট ওয়েবসাইট লিংক (Direct Web App URL)</span>
+                            <span className="text-[10px] text-slate-500">
+                              ইউজাররা লিংকে চাপ দিলেই সরাসরি ব্রাউজারে অ্যাপ ওপেন হবে (যেমন: <code className="text-indigo-600">https://ais-pre...run.app?ref=CODE</code>)
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="referralLinkFormat"
+                            checked={(sysSettings.referralLinkFormat || 'mini_app') === 'mini_app'}
+                            onChange={() =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                referralLinkFormat: 'mini_app',
+                              }))
+                            }
+                            className="mt-0.5 accent-amber-600 cursor-pointer"
+                          />
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800 block">⚡ ডাইরেক্ট টেলিগ্রাম মিনি অ্যাপ (1-Click Telegram App)</span>
+                            <span className="text-[10px] text-slate-500">
+                              চ্যাট ছাড়াও ১-ক্লিকে টেলিগ্রামের ভেতর অ্যাপ ওপেন হবে (যেমন: <code className="text-indigo-600">t.me/SmartEarning_bot/app?startapp=CODE</code>)
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="referralLinkFormat"
+                            checked={(sysSettings.referralLinkFormat || 'mini_app') === 'bot_start'}
+                            onChange={() =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                referralLinkFormat: 'bot_start',
+                              }))
+                            }
+                            className="mt-0.5 accent-amber-600 cursor-pointer"
+                          />
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800 block">🤖 টেলিগ্রাম বট চ্যাট লিংক (Bot Start Chat)</span>
+                            <span className="text-[10px] text-slate-500">
+                              বটের মূল চ্যাটে নিয়ে যাবে (যেমন: <code className="text-indigo-600">t.me/SmartEarning_bot?start=CODE</code>)
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {sysSettings.referralLinkFormat === 'web_url' && (
+                        <div className="pt-1">
+                          <label className="text-[10px] font-bold text-slate-600 mb-0.5 block">
+                            কাস্টম ওয়েবসাইট URL (ফাঁকা রাখলে বর্তমান অ্যাপের মূল লিংক ব্যবহার হবে)
+                          </label>
+                          <input
+                            type="text"
+                            value={sysSettings.customWebUrl || ''}
+                            onChange={(e) =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                customWebUrl: e.target.value,
+                              }))
+                            }
+                            placeholder="https://ais-pre-ggdb4cv4g7cfbb3xlhcvwn-374535181190.asia-southeast1.run.app"
+                            className="w-full text-xs py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 font-mono"
+                          />
+                        </div>
+                      )}
+
+                      {sysSettings.referralLinkFormat === 'mini_app' && (
+                        <div className="pt-1">
+                          <label className="text-[10px] font-bold text-slate-600 mb-0.5 block">
+                            BotFather এর Mini App Short Name (ডিফল্ট: app)
+                          </label>
+                          <input
+                            type="text"
+                            value={sysSettings.miniAppShortName || ''}
+                            onChange={(e) =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                miniAppShortName: e.target.value,
+                              }))
+                            }
+                            placeholder="app"
+                            className="w-full text-xs py-1.5 px-2.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 font-mono"
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     <div>
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
                         টেলিগ্রাম চ্যানেল ইউজারনেম/আইডি

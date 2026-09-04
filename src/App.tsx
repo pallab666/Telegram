@@ -246,6 +246,27 @@ export default function App() {
     initTelegramApp();
     syncAdConfigFromServer();
 
+    // Check for referral code in Telegram initData or URL search params
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRef = urlParams.get('ref') || urlParams.get('startapp') || urlParams.get('start');
+      const tgRef = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      const refCode = urlRef || tgRef;
+
+      if (refCode) {
+        const cleanCode = refCode.trim().toUpperCase();
+        const existingRef = localStorage.getItem('smart_earning_referred_by');
+        if (!existingRef) {
+          localStorage.setItem('smart_earning_referred_by', cleanCode);
+          setTimeout(() => {
+            showToast(`🎁 আপনি রেফারেল কোড [${cleanCode}] এর মাধ্যমে যুক্ত হয়েছেন!`);
+          }, 1500);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     // Check if launched inside Telegram with user info
     const tgUser = getTelegramUser();
     if (tgUser) {
