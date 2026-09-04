@@ -11,6 +11,7 @@ export interface SystemSettings {
   adminSupportUsername: string;
   howToWorkVideoUrl: string;
   telegramBotToken?: string;
+  telegramBotUsername?: string;
   telegramChannelUsername?: string;
   notifyOnNewTask?: boolean;
   notifyOnNewVideo?: boolean;
@@ -40,6 +41,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   adminSupportUsername: "@SmartEarningSupport",
   howToWorkVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   telegramBotToken: "",
+  telegramBotUsername: "SmartEarning_bot",
   telegramChannelUsername: "@SmartEarningBdOfficial",
   notifyOnNewTask: true,
   notifyOnNewVideo: true,

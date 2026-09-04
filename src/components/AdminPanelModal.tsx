@@ -2304,6 +2304,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                     <div>
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Telegram Bot Username (রেফারেন্স লিংকের জন্য)
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.telegramBotUsername || ''}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            telegramBotUsername: e.target.value,
+                          }))
+                        }
+                        placeholder="SmartEarning_bot"
+                        className="w-full text-xs py-2 px-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none font-bold text-slate-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
                         টেলিগ্রাম চ্যানেল ইউজারনেম/আইডি
                       </label>
                       <input

@@ -27,6 +27,7 @@ import {
 import confetti from "canvas-confetti";
 import { triggerHaptic } from "../utils/telegram";
 import { playAppSound } from "../utils/preferences";
+import { getSystemSettings } from "../utils/systemSettings";
 import { ReferredUser } from "../types";
 
 interface ReferModalProps {
@@ -172,7 +173,10 @@ export const ReferModal: React.FC<ReferModalProps> = ({
 
   if (!isOpen) return null;
 
-  const botInviteLink = `https://t.me/SmartEarning_bot?start=${referralCode}`;
+  const sysSettings = getSystemSettings();
+  const rawBot = sysSettings.telegramBotUsername || "SmartEarning_bot";
+  const cleanBot = rawBot.replace(/^@/, "").trim() || "SmartEarning_bot";
+  const botInviteLink = `https://t.me/${cleanBot}?start=${referralCode}`;
   
   // Calculations based on the anti-fraud rules
   const totalReferrals = referrals.length;
