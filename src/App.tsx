@@ -48,7 +48,7 @@ export default function App() {
             : parsed.referralsCount ?? 0;
 
         // Ensure user has their own unique referral code
-        const refCode = (parsed.referralCode && parsed.referralCode !== 'SMART8829')
+        const refCode = (parsed.referralCode && parsed.referralCode !== 'SMART8829' && (parsed.referralCode.includes('_') || (parsed.telegramId && parsed.referralCode.includes(String(parsed.telegramId)))))
           ? parsed.referralCode
           : generateUniqueReferralCode({ telegramId: parsed.telegramId, username: parsed.username, name: parsed.name });
 
@@ -207,6 +207,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [onlineCount, setOnlineCount] = useState<number>(1);
+  const [totalUsersCount, setTotalUsersCount] = useState<number>(1);
 
   // Modals
   const [isTasksOpen, setIsTasksOpen] = useState(false);
@@ -291,14 +292,16 @@ export default function App() {
       registerTelegramUserOnServer(tgUser);
       setUser((prev) => {
         const fullName = `${tgUser.first_name} ${tgUser.last_name || ''}`.trim();
-        const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829')
+        const currentHasTelegramId = prev.referralCode && prev.referralCode.includes(String(tgUser.id));
+        const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829' && currentHasTelegramId)
           ? prev.referralCode
           : generateUniqueReferralCode({ telegramId: tgUser.id, username: tgUser.username, name: fullName });
 
         return {
           ...prev,
+          id: `tg_${tgUser.id}`,
           name: fullName,
-          username: tgUser.username || prev.username,
+          username: tgUser.username || prev.username || `user_${tgUser.id}`,
           telegramId: tgUser.id,
           avatarUrl: tgUser.photo_url || prev.avatarUrl,
           referralCode: newRefCode,
@@ -313,6 +316,9 @@ export default function App() {
       name: tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : user.name,
       onCountChange: (count) => {
         setOnlineCount(count);
+      },
+      onTotalUsersChange: (total) => {
+        setTotalUsersCount(total);
       },
     });
 
@@ -862,6 +868,7 @@ export default function App() {
         <TelegramHeader
           user={user}
           onlineCount={onlineCount}
+          totalUsers={totalUsersCount}
           language={preferences.language}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenAdmin={() => setIsAdminOpen(true)}

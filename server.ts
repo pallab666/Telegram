@@ -61,9 +61,11 @@ async function startServer() {
 
     pruneSessions();
     const onlineCount = Math.max(1, activeSessions.size);
+    const totalUsers = getTotalUserCount();
     res.json({
       success: true,
       onlineCount,
+      totalUsers,
       timestamp: Date.now(),
     });
   });
@@ -86,14 +88,16 @@ async function startServer() {
     res.json({
       success: true,
       onlineCount: Math.max(1, activeSessions.size),
+      totalUsers: getTotalUserCount(),
     });
   });
 
-  // 4. Get active online count
+  // 4. Get active online count & total registered users
   app.get("/api/presence/count", (req, res) => {
     pruneSessions();
     res.json({
       onlineCount: Math.max(1, activeSessions.size),
+      totalUsers: getTotalUserCount(),
       timestamp: Date.now(),
     });
   });
@@ -626,6 +630,21 @@ async function startServer() {
       fs.writeFileSync(REFERRALS_STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
     } catch (err) {
       console.error("Error writing referrals store:", err);
+    }
+  }
+
+  function getTotalUserCount(): number {
+    try {
+      const tgUsers = Object.keys(getStoredTelegramUsers()).length;
+      const lbUsers = getStoredLeaderboard().length;
+      let refCount = 0;
+      const refStore = getStoredReferrals();
+      Object.values(refStore).forEach((arr) => {
+        if (Array.isArray(arr)) refCount += arr.length;
+      });
+      return Math.max(1, tgUsers, lbUsers, refCount);
+    } catch {
+      return 1;
     }
   }
 

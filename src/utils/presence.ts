@@ -74,6 +74,7 @@ function getLocalActiveTabCount(): number {
 
 export interface PresenceTrackerOptions extends PresenceUserPayload {
   onCountChange: (count: number) => void;
+  onTotalUsersChange?: (total: number) => void;
 }
 
 /**
@@ -95,6 +96,9 @@ export function initPresenceTracker(options: PresenceTrackerOptions): () => void
       broadcastChannel.onmessage = (event) => {
         if (event.data?.type === 'ONLINE_COUNT_UPDATE' && typeof event.data.count === 'number') {
           options.onCountChange(Math.max(1, event.data.count));
+          if (typeof event.data.totalUsers === 'number' && options.onTotalUsersChange) {
+            options.onTotalUsersChange(Math.max(1, event.data.totalUsers));
+          }
         } else if (event.data?.type === 'PING') {
           // Respond to tab ping
           recordLocalTabPresence(clientId);
@@ -129,9 +133,13 @@ export function initPresenceTracker(options: PresenceTrackerOptions): () => void
         if (data && typeof data.onlineCount === 'number') {
           const count = Math.max(1, data.onlineCount);
           options.onCountChange(count);
+          if (typeof data.totalUsers === 'number' && options.onTotalUsersChange) {
+            options.onTotalUsersChange(Math.max(1, data.totalUsers));
+          }
           broadcastChannel?.postMessage({
             type: 'ONLINE_COUNT_UPDATE',
             count,
+            totalUsers: data.totalUsers,
           });
           return;
         }

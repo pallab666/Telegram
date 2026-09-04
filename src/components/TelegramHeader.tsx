@@ -6,6 +6,7 @@ import { triggerHaptic } from "../utils/telegram";
 interface TelegramHeaderProps {
   user: UserData;
   onlineCount: number;
+  totalUsers?: number;
   language?: 'bn' | 'en';
   onOpenSettings: () => void;
   onOpenAdmin?: () => void;
@@ -17,6 +18,7 @@ interface TelegramHeaderProps {
 export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
   user,
   onlineCount,
+  totalUsers = 1,
   language = 'bn',
   onOpenSettings,
   onOpenAdmin,
@@ -51,26 +53,28 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
             />
           </div>
           <div className="text-left">
-            <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">
+            <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[110px]">
               {user.name}
             </div>
-            <div className="text-[10px] text-slate-400 truncate max-w-[120px]">@{user.username}</div>
+            <div className="text-[10px] text-slate-400 truncate max-w-[110px]">@{user.username}</div>
           </div>
         </button>
 
-        {/* Online status indicator - Real-time pulse pill */}
+        {/* Online status indicator & Total users count pill */}
         <div
           id="badge-online-users"
           className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full shadow-xs"
-          title={language === 'bn' ? `রিয়েল-টাইম একটিভ: ${onlineCount} জন লাইভ` : `Real-time Active: ${onlineCount} online`}
+          title={language === 'bn' ? `লাইভ একটিভ: ${onlineCount} জন | সর্বমোট ইউজার: ${totalUsers} জন` : `Active: ${onlineCount} online | Total Users: ${totalUsers}`}
         >
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
-            {onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}
-          </span>
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-700">
+            <span>{onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-indigo-600 font-extrabold">{totalUsers} {language === 'bn' ? 'ইউজার' : 'USERS'}</span>
+          </div>
         </div>
 
         {/* Action Controls: Settings button */}
