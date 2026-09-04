@@ -32,8 +32,9 @@ const SECTORS: Sector[] = [
   { amount: 2.0, label: "৳২.০", color: "#14b8a6", textColor: "#ffffff" }, // Teal
 ];
 
-const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
-const STORAGE_KEY = "smart_earning_daily_spin_last_time";
+const COOLDOWN_MS = 8 * 60 * 60 * 1000; // 8 hours
+const STORAGE_KEY = "smart_earning_spin_last_time_8h";
+const LEGACY_STORAGE_KEY = "smart_earning_daily_spin_last_time";
 
 export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({
   onWinReward,
@@ -50,7 +51,18 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({
   // Check cooldown state on mount and update every second
   useEffect(() => {
     const updateCooldown = () => {
-      const savedTime = localStorage.getItem(STORAGE_KEY);
+      let savedTime = localStorage.getItem(STORAGE_KEY);
+      if (!savedTime) {
+        // Fallback to legacy key if exists
+        const legacyTime = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacyTime) {
+          const legacyElapsed = Date.now() - parseInt(legacyTime, 10);
+          if (legacyElapsed < COOLDOWN_MS) {
+            savedTime = legacyTime;
+          }
+        }
+      }
+
       if (!savedTime) {
         setCooldownRemaining(0);
         return;
@@ -147,14 +159,16 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
-                  ডেইলি লাকি স্পিন (Daily Spin)
+                  {isBn ? "লাকি স্পিন হুইল (Lucky Spin)" : "Lucky Spin Wheel"}
                 </h3>
                 <span className="text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full border border-amber-200">
-                  24H
+                  8H
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                প্রতি ২৪ ঘণ্টায় একবার চাকা ঘুরিয়ে ফ্রি টাকা জিতুন!
+                {isBn
+                  ? "প্রতি ৮ ঘণ্টায় ১টি ফ্রি স্পিন ঘুরিয়ে নিশ্চিত ক্যাশ টাকা জিতুন!"
+                  : "Spin the wheel every 8 hours for free cash!"}
               </p>
             </div>
           </div>

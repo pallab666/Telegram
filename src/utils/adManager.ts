@@ -60,8 +60,45 @@ export function saveAdConfig(config: AdminAdConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   } catch (e) {
-    console.error('Failed to save ad config', e);
+    console.error('Failed to save ad config to localStorage', e);
   }
+
+  // Persist to server so all visitors receive real Adsterra / Monetag links
+  try {
+    fetch('/api/ad-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config }),
+    }).catch(() => {});
+  } catch (err) {
+    console.error('Failed to save ad config to server', err);
+  }
+}
+
+/**
+ * Fetch latest global Adsterra / Monetag config from server on app load
+ */
+export async function syncAdConfigFromServer(): Promise<AdminAdConfig> {
+  if (typeof window === 'undefined') return DEFAULT_AD_CONFIG;
+  try {
+    const res = await fetch('/api/ad-config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.config) {
+        const local = getAdConfig();
+        const merged: AdminAdConfig = {
+          ...DEFAULT_AD_CONFIG,
+          ...local,
+          ...data.config,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not sync ad config from server, using local:', err);
+  }
+  return getAdConfig();
 }
 
 /**
@@ -69,7 +106,7 @@ export function saveAdConfig(config: AdminAdConfig): void {
  * Intelligently cycles between 4 Ad IDs (2 Adsterra + 2 Monetag)
  * to prevent duplicate ad impression penalties for users in the same location/IP.
  */
-export function triggerSmartAd(triggerPoint: 'video' | 'spin' | 'task' = 'video'): {
+export function triggerSmartAd(triggerPoint: 'video' | 'spin' | 'task' | 'scratch' = 'video'): {
   served: boolean;
   network?: 'adsterra' | 'monetag';
   url?: string;

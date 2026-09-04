@@ -112,35 +112,14 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
           </span>
         </div>
 
-        {/* Action Controls: Admin PIN + Settings */}
+        {/* Action Controls: Settings button */}
         <div className="flex items-center gap-1.5">
-          {onOpenAdmin && (
-            <button
-              onClick={() => {
-                triggerHaptic("medium");
-                onOpenAdmin();
-              }}
-              className="relative w-9 h-9 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 shadow-sm transition-all active:scale-90 cursor-pointer"
-              id="btn-header-admin-pin"
-              title="অ্যাডমিন প্যানেল (PIN)"
-              aria-label="Admin Panel"
-            >
-              <Lock className="w-4 h-4 text-amber-700" />
-              {pendingWithdrawalsCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow-xs">
-                  {pendingWithdrawalsCount > 9 ? "9+" : pendingWithdrawalsCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Settings button */}
           <button
             onClick={() => {
               triggerHaptic("medium");
               onOpenSettings();
             }}
-            className="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm transition-all active:scale-90"
+            className="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm transition-all active:scale-90 cursor-pointer"
             id="btn-settings-gear"
             aria-label="Settings"
           >

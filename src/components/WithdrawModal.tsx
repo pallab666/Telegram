@@ -15,6 +15,7 @@ import {
   CURRENCY_CONFIGS,
   formatMoney,
 } from "../utils/preferences";
+import { getSystemSettings } from "../utils/systemSettings";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -41,9 +42,19 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const currency = preferences?.currency || "BDT";
   const curConfig = CURRENCY_CONFIGS[currency] || CURRENCY_CONFIGS.BDT;
 
-  const [method, setMethod] = useState<
-    "bKash" | "Nagad" | "Rocket" | "Binance"
-  >("bKash");
+  const sysSettings = getSystemSettings();
+  const allMethodsList = [
+    { id: "bKash", name: "বিকাশ" },
+    { id: "Nagad", name: "নগদ" },
+    { id: "Rocket", name: "রকেট" },
+    { id: "Binance", name: "Binance" },
+    { id: "Upay", name: "Upay" },
+    { id: "CellFin", name: "CellFin" },
+  ].filter(
+    (item) =>
+      sysSettings.enabledMethods[item.id as keyof typeof sysSettings.enabledMethods] !== false
+  );
+  const [method, setMethod] = useState<string>("bKash");
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState<"Personal" | "Agent">(
     "Personal",
@@ -227,13 +238,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-2">
                     পেমেন্ট মেথড বেছে নিন:
                   </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { id: "bKash", name: "বিকাশ" },
-                      { id: "Nagad", name: "নগদ" },
-                      { id: "Rocket", name: "রকেট" },
-                      { id: "Binance", name: "Binance" },
-                    ].map((item) => (
+                  <div className="grid grid-cols-3 gap-2">
+                    {allMethodsList.map((item) => (
                       <button
                         key={item.id}
                         type="button"

@@ -542,6 +542,36 @@ export const RankModal: React.FC<RankModalProps> = ({
           )}
         </AnimatePresence>
 
+        {/* WEEKLY REFERRAL TOP 3 BONUS BANNER */}
+        {activeCategoryTab === "Top Refs" && (
+          <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-950 rounded-2xl p-4 text-white shadow-lg border border-indigo-400/40 mb-4 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <span className="bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                <Trophy size={12} className="fill-slate-950" />
+                {language === 'bn' ? 'সাপ্তাহিক রেফারেল বোনাস রেস' : 'Weekly Referral Race'}
+              </span>
+              <span className="text-[10px] font-mono font-bold text-amber-300 bg-black/40 px-2 py-0.5 rounded-md border border-amber-400/20">
+                {formatCountdown()}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-400/40 backdrop-blur-md flex items-center justify-center text-amber-300 text-2xl font-black shrink-0 shadow-inner">
+                👑
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-white leading-tight">
+                  {language === 'bn' ? 'টপ ৩ রেফারার পাবেন মেগা ক্যাশ প্রাইজ!' : 'Top 3 Referrers Win Cash Prizes!'}
+                </h4>
+                <p className="text-[11px] text-indigo-200 mt-0.5 leading-snug">
+                  {language === 'bn'
+                    ? '১ম স্থান: ৳৫০০ | ২য় স্থান: ৳৩০০ | ৩য় স্থান: ৳১৫০ (প্রতি রোববার স্বয়ংক্রিয় মূল ব্যালেন্সে যোগ)'
+                    : '1st: ৳500 | 2nd: ৳300 | 3rd: ৳150 (Auto credited every Sunday)'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* REAL LEADERBOARD LIST */}
         <div className="space-y-3">
           {leaderboardList.length === 0 ? (
@@ -594,8 +624,15 @@ export const RankModal: React.FC<RankModalProps> = ({
                               </span>
                             )}
                           </div>
-                          <div className={`text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-xs border ${badge.style}`}>
-                            <span>{badge.icon}</span> {badge.text}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <div className={`text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-xs border ${badge.style}`}>
+                              <span>{badge.icon}</span> {badge.text}
+                            </div>
+                            {activeCategoryTab === "Top Refs" && (
+                              <span className="text-[9px] font-black text-amber-800 bg-amber-200/90 px-2 py-0.5 rounded-full border border-amber-400 shadow-xs">
+                                👑 {language === 'bn' ? 'বোনাস ৳৫০০' : 'Bonus ৳500'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -656,8 +693,20 @@ export const RankModal: React.FC<RankModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 border mt-0.5 ${badge.style}`}>
-                        <span>{badge.icon}</span> {badge.text}
+                      <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 border ${badge.style}`}>
+                          <span>{badge.icon}</span> {badge.text}
+                        </div>
+                        {activeCategoryTab === "Top Refs" && item.rank === 2 && (
+                          <span className="text-[9px] font-black text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded-full border border-slate-300">
+                            🥈 {language === 'bn' ? 'বোনাস ৳৩০০' : 'Bonus ৳300'}
+                          </span>
+                        )}
+                        {activeCategoryTab === "Top Refs" && item.rank === 3 && (
+                          <span className="text-[9px] font-black text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300">
+                            🥉 {language === 'bn' ? 'বোনাস ৳১৫০' : 'Bonus ৳150'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

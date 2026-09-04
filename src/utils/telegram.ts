@@ -76,15 +76,21 @@ export function getTelegramUser() {
 
 export function openAdLink(url: string) {
   if (!url || typeof window === 'undefined') return;
+  const cleanUrl = url.trim();
+  if (cleanUrl.length < 4) return;
+  const targetUrl = cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')
+    ? cleanUrl
+    : `https://${cleanUrl}`;
+
   try {
     if (window.Telegram?.WebApp?.openLink) {
-      window.Telegram.WebApp.openLink(url);
+      window.Telegram.WebApp.openLink(targetUrl);
     } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }
   } catch (e) {
     try {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('Failed to open ad link:', err);
     }

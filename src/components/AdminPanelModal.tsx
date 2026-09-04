@@ -40,8 +40,15 @@ import {
   Smartphone,
   Save,
   Radio,
+  Megaphone,
+  Settings,
+  Users,
+  Gift,
+  Shield,
 } from 'lucide-react';
 import { AdminAdConfig, getAdConfig, saveAdConfig } from '../utils/adManager';
+import { getLocalAnnouncement, saveLocalAnnouncement } from '../utils/announcementManager';
+import { getSystemSettings, saveSystemSettings, SystemSettings } from '../utils/systemSettings';
 import { triggerHaptic, openAdLink } from '../utils/telegram';
 import { WithdrawalRecord, VideoClip, EarnTask } from '../types';
 import { INITIAL_TASKS } from '../data/mockData';
@@ -86,8 +93,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newPin, setNewPin] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
-  // Admin section tabs: 'withdrawals' | 'earnLinks' | 'ads' | 'videos'
-  const [adminTab, setAdminTab] = useState<'withdrawals' | 'earnLinks' | 'ads' | 'videos'>('withdrawals');
+  // Admin section tabs: 'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'settings'
+  const [adminTab, setAdminTab] = useState<'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'settings'>('withdrawals');
+
+  // System Settings state
+  const [sysSettings, setSysSettings] = useState<SystemSettings>(() => getSystemSettings());
+  const [settingsSavedSuccess, setSettingsSavedSuccess] = useState(false);
+
+  // Announcement Broadcast State in Admin Panel
+  const [adminNotice, setAdminNotice] = useState(() => getLocalAnnouncement());
+  const [noticeSavedSuccess, setNoticeSavedSuccess] = useState(false);
 
   // Earn Tasks state
   const [editableTasks, setEditableTasks] = useState<EarnTask[]>(() => {
@@ -602,6 +617,36 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               >
                 <Play className="w-3.5 h-3.5" />
                 <span>ভিডিও</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setAdminTab('announcement');
+                }}
+                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                  adminTab === 'announcement'
+                    ? 'border-indigo-400 text-indigo-300'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Megaphone className="w-3.5 h-3.5 text-indigo-400" />
+                <span>নোটিশ</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setAdminTab('settings');
+                }}
+                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                  adminTab === 'settings'
+                    ? 'border-cyan-400 text-cyan-300'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <span>সেটিংস</span>
               </button>
             </div>
 
@@ -1738,7 +1783,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
                 </form>
               </div>
-            ) : (
+            ) : adminTab === 'videos' ? (
               /* TAB 3: VIDEOS MANAGEMENT */
               <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50">
                 {/* Upload New Video Form */}
@@ -1896,7 +1941,447 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
 
               </div>
-            )}
+            ) : adminTab === 'announcement' ? (
+              /* TAB 5: BROADCAST NOTICE / ANNOUNCEMENT MANAGEMENT */
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="bg-gradient-to-br from-purple-700 via-indigo-600 to-purple-800 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+                      <Megaphone className="w-5 h-5 text-amber-300 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-white">অ্যাডমিন ব্রডকাস্ট নোটিশ পপ-আপ</h3>
+                      <p className="text-[11px] text-purple-100 font-medium">
+                        এখানে নোটিশ লিখলে অ্যাপ খোলার সাথে সাথে সকল ব্যবহারকারী পপ-আপ ব্যানারে এটি দেখতে পাবে।
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <span>নোটিশ পপ-আপ সক্রিয় করুন (Enable Broadcast)</span>
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={adminNotice.enabled}
+                      onChange={(e) =>
+                        setAdminNotice((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
+                      className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block">
+                      ব্যাজ / ট্যাগ (যেমন: মেগা অফার 🔥)
+                    </label>
+                    <input
+                      type="text"
+                      value={adminNotice.badge || ''}
+                      onChange={(e) =>
+                        setAdminNotice((prev) => ({ ...prev, badge: e.target.value }))
+                      }
+                      placeholder="মেগা অফার 🔥"
+                      className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block">
+                      নোটিশ শিরোনাম (Title)
+                    </label>
+                    <input
+                      type="text"
+                      value={adminNotice.title || ''}
+                      onChange={(e) =>
+                        setAdminNotice((prev) => ({ ...prev, title: e.target.value }))
+                      }
+                      placeholder="যেমন: আজ রাত ৮টায় মেগা রিওয়ার্ড ইভেন্ট!"
+                      className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block">
+                      বিস্তারিত বার্তা (Message)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={adminNotice.message || ''}
+                      onChange={(e) =>
+                        setAdminNotice((prev) => ({ ...prev, message: e.target.value }))
+                      }
+                      placeholder="সকল টাস্ক সম্পন্ন করে প্রতিদিন ১০০+ টাকা পর্যন্ত আয় করুন..."
+                      className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block">
+                        বাটন টেক্সট (Button Text)
+                      </label>
+                      <input
+                        type="text"
+                        value={adminNotice.linkText || ''}
+                        onChange={(e) =>
+                          setAdminNotice((prev) => ({ ...prev, linkText: e.target.value }))
+                        }
+                        placeholder="বিস্তারিত দেখুন"
+                        className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block">
+                        অ্যাকশন লিংক URL (ঐচ্ছিক)
+                      </label>
+                      <input
+                        type="text"
+                        value={adminNotice.linkUrl || ''}
+                        onChange={(e) =>
+                          setAdminNotice((prev) => ({ ...prev, linkUrl: e.target.value }))
+                        }
+                        placeholder="https://t.me/..."
+                        className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      triggerHaptic('medium');
+                      const updated = {
+                        ...adminNotice,
+                        id: `notice_${Date.now()}`,
+                        updatedAt: Date.now(),
+                      };
+                      setAdminNotice(updated);
+                      saveLocalAnnouncement(updated);
+                      setNoticeSavedSuccess(true);
+                      onShowToast('✅ ব্রডকাস্ট নোটিশ সফলভাবে পাবলিশ করা হয়েছে!');
+                      setTimeout(() => setNoticeSavedSuccess(false), 3000);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer mt-2"
+                  >
+                    <Save className="w-4 h-4 text-amber-300" />
+                    <span>নোটিশ ব্রডকাস্ট করুন (Publish Broadcast Notice)</span>
+                  </button>
+
+                  {noticeSavedSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-xs font-bold text-emerald-700 animate-in fade-in">
+                      ✅ নোটিশ সফলভাবে আপডেট হয়েছে! সব ইউজারের কাছে পপ-আপ দেখাবে।
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : adminTab === 'settings' ? (
+              /* TAB 6: SYSTEM & FEATURE SETTINGS */
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-br from-cyan-600 via-teal-600 to-cyan-800 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-300/20 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+                      <Settings className="w-5 h-5 text-amber-300 animate-spin-slow" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-white">অ্যাপ সিস্টেম ও পলিসি সেটিংস</h3>
+                      <p className="text-[11px] text-cyan-100 font-medium">
+                        রেফার বোনাস, পেমেন্ট মেথড, টেলিগ্রাম লিংক এবং গেম রুলস নিয়ন্ত্রণ করুন।
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 1. Referral Bonus Settings */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800 pb-1 border-b border-slate-100">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    <span>রেফারেল বোনাস ও ভেরিফিকেশন কন্ডিশন</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        প্রতি রেফারে বোনাস (৳ BDT)
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        value={sysSettings.referralReward}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            referralReward: Number(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        ন্যূনতম একটিভ দিন
+                      </label>
+                      <input
+                        type="number"
+                        value={sysSettings.referralMinDaysActive}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            referralMinDaysActive: Number(e.target.value) || 1,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        ন্যূনতম সম্পন্ন করা টাস্ক
+                      </label>
+                      <input
+                        type="number"
+                        value={sysSettings.referralMinTasks}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            referralMinTasks: Number(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Daily Rewards & Spin Settings */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800 pb-1 border-b border-slate-100">
+                    <Gift className="w-4 h-4 text-emerald-600" />
+                    <span>দৈনিক চেক-ইন, স্পিন হুইল ও স্ক্র্যাচ লিমিট</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        চেক-ইন বেস বোনাস (৳)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={sysSettings.dailyCheckInBaseReward}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            dailyCheckInBaseReward: Number(e.target.value) || 1,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        স্পিন কুলডাউন (ঘণ্টা)
+                      </label>
+                      <select
+                        value={sysSettings.spinCooldownHours}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            spinCooldownHours: Number(e.target.value) || 8,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      >
+                        <option value={4}>4 Hours</option>
+                        <option value={8}>8 Hours</option>
+                        <option value={12}>12 Hours</option>
+                        <option value={24}>24 Hours</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        স্পিন জ্যাকপট প্রাইস (৳)
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        value={sysSettings.spinMaxReward}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            spinMaxReward: Number(e.target.value) || 5,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        দৈনিক স্ক্র্যাচ কার্ড লিমিট
+                      </label>
+                      <input
+                        type="number"
+                        value={sysSettings.dailyScratchLimit}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            dailyScratchLimit: Number(e.target.value) || 5,
+                          }))
+                        }
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Official Community & Support Links */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800 pb-1 border-b border-slate-100">
+                    <Send className="w-4 h-4 text-sky-500" />
+                    <span>অফিশিয়াল সোশ্যাল, টেলিগ্রাম ও টিউটোরিয়াল লিংক</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        অফিশিয়াল টেলিগ্রাম চ্যানেল URL
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.telegramChannelUrl}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            telegramChannelUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="https://t.me/..."
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        টেলিগ্রাম ইউজার সাপোর্ট গ্রুপ URL
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.telegramGroupUrl}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            telegramGroupUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="https://t.me/..."
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        এডমিন সাপোর্ট ইউজারনেম (Telegram Username)
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.adminSupportUsername}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            adminSupportUsername: e.target.value,
+                          }))
+                        }
+                        placeholder="@SmartEarningSupport"
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        কাজের নিয়ম / ভিডিও গাইড URL
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.howToWorkVideoUrl}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            howToWorkVideoUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="https://www.youtube.com/..."
+                        className="w-full text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Withdrawal Payment Method Gateways */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800 pb-1 border-b border-slate-100">
+                    <Landmark className="w-4 h-4 text-emerald-600" />
+                    <span>উইথড্রয়াল পেমেন্ট মেথড সক্রিয়করণ (Payment Gateways)</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {(['bKash', 'Nagad', 'Rocket', 'Binance', 'Upay', 'CellFin'] as const).map(
+                      (method) => (
+                        <label
+                          key={method}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                          <span className="text-xs font-bold text-slate-800">{method}</span>
+                          <input
+                            type="checkbox"
+                            checked={sysSettings.enabledMethods[method] !== false}
+                            onChange={(e) =>
+                              setSysSettings((prev) => ({
+                                ...prev,
+                                enabledMethods: {
+                                  ...prev.enabledMethods,
+                                  [method]: e.target.checked,
+                                },
+                              }))
+                            }
+                            className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
+                          />
+                        </label>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <button
+                  onClick={() => {
+                    triggerHaptic('success');
+                    saveSystemSettings(sysSettings);
+                    setSettingsSavedSuccess(true);
+                    onShowToast('✅ অ্যাপ সেটিংস সফলভাবে আপডেট হয়েছে!');
+                    setTimeout(() => setSettingsSavedSuccess(false), 3000);
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-cyan-600/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4 text-amber-300" />
+                  <span>সেটিংস সেভ করুন (Save System Settings)</span>
+                </button>
+
+                {settingsSavedSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-xs font-bold text-emerald-700 animate-in fade-in">
+                    ✅ সকল সিস্টেম ও রেফারেল সেটিংস রিয়েল-টাইমে সেভ হয়েছে!
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </div>

@@ -43,6 +43,7 @@ interface ReferModalProps {
   referrals?: ReferredUser[];
   onAddTestReferral?: () => void;
   onSimulateReferralProgress?: (id: string) => void;
+  onNavigate?: (tab: string) => void;
 }
 
 export const REWARD_TIERS = [
@@ -121,6 +122,7 @@ export const ReferModal: React.FC<ReferModalProps> = ({
   referrals = [],
   onAddTestReferral,
   onSimulateReferralProgress,
+  onNavigate,
 }) => {
   const [copied, setCopied] = useState(false);
   const [localToast, setLocalToast] = useState<string | null>(null);
@@ -216,27 +218,51 @@ export const ReferModal: React.FC<ReferModalProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleSendToInbox = () => {
+  const handleShareTelegram = () => {
     triggerHaptic("success");
     playAppSound("reward");
     const shareText = language === 'bn'
-      ? `🎁 Smart Earning এ যোগ দিয়ে প্রতিদিন ফ্রি টাকা ইনকাম করুন! ৩ দিন নিয়মিত কাজ করে জিতে নিন আকর্ষণীয় বোনাস। লিংক:`
-      : `🎁 Join Smart Earning and earn daily cash! Active for 3 days to unlock big bonuses:`;
+      ? `🎁 Smart Earning এ যোগ দিয়ে প্রতিদিন ১০০+ টাকা ইনকাম করুন! ৩ দিন নিয়মিত কাজ করে জিতে নিন বিশেষ ক্যাশ বোনাস।`
+      : `🎁 Join Smart Earning & earn daily cash! Active for 3 days to unlock big bonuses:`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botInviteLink)}&text=${encodeURIComponent(shareText)}`;
 
     window.open(shareUrl, '_blank', 'noopener,noreferrer');
 
     confetti({
-      particleCount: 60,
-      spread: 60,
+      particleCount: 70,
+      spread: 70,
       origin: { y: 0.8 },
       zIndex: 9999,
     });
 
     showNotification(
       language === 'bn'
-        ? "🚀 ইনবক্স ও বন্ধুদের সাথে শেয়ার লিংক খোলা হয়েছে!"
+        ? "🚀 টেলিগ্রাম বন্ধুদের শেয়ার লিংক খোলা হয়েছে!"
         : "🚀 Telegram share link opened!"
+    );
+  };
+
+  const handleShareWhatsApp = () => {
+    triggerHaptic("success");
+    playAppSound("reward");
+    const shareText = language === 'bn'
+      ? `🎁 Smart Earning এ যোগ দিয়ে প্রতিদিন ১০০+ টাকা ফ্রি ইনকাম করুন! ৩ দিন নিয়মিত কাজ করে জিতে নিন বিশেষ ক্যাশ বোনাস।\n👉 জয়েন করতে লিংকে ক্লিক করুন: ${botInviteLink}`
+      : `🎁 Join Smart Earning & earn 100+ BDT daily! Active for 3 days to unlock big cash bonuses.\n👉 Join here: ${botInviteLink}`;
+    const shareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+
+    confetti({
+      particleCount: 70,
+      spread: 70,
+      origin: { y: 0.8 },
+      zIndex: 9999,
+    });
+
+    showNotification(
+      language === 'bn'
+        ? "📱 হোয়াটসঅ্যাপ বন্ধুদের শেয়ার লিংক খোলা হয়েছে!"
+        : "📱 WhatsApp share link opened!"
     );
   };
 
@@ -429,16 +455,34 @@ export const ReferModal: React.FC<ReferModalProps> = ({
               </div>
             </div>
 
-            {/* Send to Inbox Button */}
-            <button
-              onClick={handleSendToInbox}
-              className="w-full mt-4 bg-gradient-to-b from-[#fde047] to-[#f59e0b] shadow-[0_4px_0_#b45309] hover:brightness-105 rounded-2xl py-3.5 flex items-center justify-center gap-2 transition-all active:shadow-[0_0px_0_#b45309] active:translate-y-1 cursor-pointer"
-            >
-              <Send className="text-[#78350f]" size={20} />
-              <span className="text-[#78350f] font-black text-[16px]">
-                {language === 'bn' ? 'টেলিগ্রাম ইনবক্সে শেয়ার করুন' : 'Send to Inbox'}
-              </span>
-            </button>
+            {/* 1-CLICK VIRAL SHARE BUTTONS (TELEGRAM & WHATSAPP) */}
+            <div className="grid grid-cols-2 gap-2.5 mt-4">
+              {/* Telegram Share Button */}
+              <button
+                onClick={handleShareTelegram}
+                className="bg-gradient-to-r from-sky-400 to-blue-600 shadow-[0_4px_0_#1d4ed8] hover:brightness-105 rounded-2xl py-3 px-2 flex items-center justify-center gap-1.5 transition-all active:shadow-none active:translate-y-1 cursor-pointer text-white font-black text-xs sm:text-sm"
+              >
+                <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69l-2.87-.9c-.63-.2-.64-.63.14-.93 3.56-1.55 5.94-2.58 7.14-3.08 3.39-1.41 4.1-1.65 4.56-1.66.1 0 .33.02.48.15.12.11.16.27.17.38 0 .09.01.24 0 .38z"/>
+                </svg>
+                <span className="truncate">
+                  {language === 'bn' ? 'টেলিগ্রাম বন্ধুদের শেয়ার' : 'Share Telegram'}
+                </span>
+              </button>
+
+              {/* WhatsApp Share Button */}
+              <button
+                onClick={handleShareWhatsApp}
+                className="bg-gradient-to-r from-emerald-400 to-green-600 shadow-[0_4px_0_#15803d] hover:brightness-105 rounded-2xl py-3 px-2 flex items-center justify-center gap-1.5 transition-all active:shadow-none active:translate-y-1 cursor-pointer text-white font-black text-xs sm:text-sm"
+              >
+                <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414-.074-.124-.272-.198-.57-.347z"/>
+                </svg>
+                <span className="truncate">
+                  {language === 'bn' ? 'হোয়াটসঅ্যাপে শেয়ার' : 'Share WhatsApp'}
+                </span>
+              </button>
+            </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-2 mt-4">
@@ -488,6 +532,86 @@ export const ReferModal: React.FC<ReferModalProps> = ({
                 <span>{copied ? (language === 'bn' ? 'কপি হয়েছে' : 'Copied') : (language === 'bn' ? 'কপি' : 'Copy')}</span>
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* TOP REFERRER WEEKLY BONUS PRIZES CARD */}
+        <div className="bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#4338ca] rounded-[2.25rem] p-5 shadow-xl shadow-indigo-950/20 text-white relative overflow-hidden border border-indigo-400/30">
+          <Crown className="absolute -right-6 -bottom-6 w-40 h-40 text-amber-400/10 rotate-[12deg] pointer-events-none" />
+
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md">
+                <Crown size={13} className="fill-slate-950" />
+                {language === 'bn' ? 'সাপ্তাহিক স্পেশাল বোনাস' : 'Weekly Special Bonus'}
+              </span>
+              <span className="text-[10px] text-indigo-200 font-bold bg-indigo-900/60 px-2.5 py-1 rounded-lg border border-indigo-400/20 font-mono">
+                {timeLeft}
+              </span>
+            </div>
+
+            <h3 className="text-xl font-black text-white mb-1 leading-snug drop-shadow-sm">
+              {language === 'bn' ? '🔥 সাপ্তাহিক টপ ৩ রেফারার বোনাস' : '🔥 Top 3 Weekly Referrer Prizes'}
+            </h3>
+            <p className="text-xs text-indigo-200 font-medium leading-relaxed mb-4">
+              {language === 'bn'
+                ? 'প্রতি সপ্তাহে সবচেয়ে বেশি রেফারকারী সেরা ৩ জন মেম্বারকে সরাসরি মূল ব্যালেন্সে স্পেশাল ক্যাশ বোনাস দেওয়া হয়!'
+                : 'Top 3 referrers each week get extra special cash bonuses added directly to their main balance!'}
+            </p>
+
+            {/* Top 3 Prize Cards Grid */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {/* 1st Place */}
+              <div className="bg-gradient-to-b from-amber-400/20 to-yellow-500/10 border border-amber-400/50 rounded-2xl p-2.5 text-center shadow-inner relative overflow-hidden">
+                <div className="text-2xl mb-0.5">🥇</div>
+                <div className="text-[10px] font-black text-amber-300 uppercase">{language === 'bn' ? '১ম স্থান' : '1st Rank'}</div>
+                <div className="text-sm font-black text-white font-mono mt-0.5">৳৫০০</div>
+                <div className="text-[9px] text-amber-200/80 font-bold mt-0.5">{language === 'bn' ? '+ কিং ব্যাজ' : '+ King Badge'}</div>
+              </div>
+
+              {/* 2nd Place */}
+              <div className="bg-gradient-to-b from-slate-300/20 to-slate-400/10 border border-slate-300/40 rounded-2xl p-2.5 text-center shadow-inner relative overflow-hidden">
+                <div className="text-2xl mb-0.5">🥈</div>
+                <div className="text-[10px] font-black text-slate-200 uppercase">{language === 'bn' ? '২য় স্থান' : '2nd Rank'}</div>
+                <div className="text-sm font-black text-white font-mono mt-0.5">৳৩০০</div>
+                <div className="text-[9px] text-slate-300/80 font-bold mt-0.5">{language === 'bn' ? '+ মাস্টার ব্যাজ' : '+ Master Badge'}</div>
+              </div>
+
+              {/* 3rd Place */}
+              <div className="bg-gradient-to-b from-amber-700/20 to-amber-800/10 border border-amber-600/40 rounded-2xl p-2.5 text-center shadow-inner relative overflow-hidden">
+                <div className="text-2xl mb-0.5">🥉</div>
+                <div className="text-[10px] font-black text-amber-200 uppercase">{language === 'bn' ? '৩য় স্থান' : '3rd Rank'}</div>
+                <div className="text-sm font-black text-white font-mono mt-0.5">৳১৫০</div>
+                <div className="text-[9px] text-amber-300/80 font-bold mt-0.5">{language === 'bn' ? '+ স্টার ব্যাজ' : '+ Star Badge'}</div>
+              </div>
+            </div>
+
+            {/* Current user's referral rank prompt */}
+            <div className="bg-indigo-950/60 rounded-xl p-2.5 border border-indigo-400/20 flex items-center justify-between mb-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Users size={15} className="text-amber-400" />
+                <span className="text-indigo-100 font-bold">
+                  {language === 'bn' ? `আপনার মোট ইনভাইট: ${totalReferrals} জন` : `Your Total Invites: ${totalReferrals}`}
+                </span>
+              </div>
+              <span className="text-amber-300 font-black text-xs bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/30">
+                {language === 'bn' ? 'সাপ্তাহিক রেশ চলছে' : 'Weekly Race Active'}
+              </span>
+            </div>
+
+            {/* Leaderboard Button */}
+            {onNavigate && (
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onNavigate('rank');
+                }}
+                className="w-full bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:brightness-105 text-slate-950 font-black text-xs py-3 rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-[0.98] cursor-pointer"
+              >
+                <Crown size={16} className="fill-slate-950" />
+                <span>{language === 'bn' ? 'সাপ্তাহিক রেফারেল লিডারবোর্ড দেখুন 👉' : 'View Weekly Leaderboard 👉'}</span>
+              </button>
+            )}
           </div>
         </div>
 

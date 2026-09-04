@@ -36,7 +36,7 @@ export const INITIAL_TASKS: EarnTask[] = [
     category: 'special',
     completed: false,
     link: 'https://t.me/smart_earning_bd',
-    duration: 10,
+    duration: 30,
   },
   {
     id: 'task_tg_group',
@@ -47,7 +47,7 @@ export const INITIAL_TASKS: EarnTask[] = [
     category: 'special',
     completed: false,
     link: 'https://t.me/smart_earning_group',
-    duration: 10,
+    duration: 30,
   },
   {
     id: 'task_yt_sub',
@@ -58,7 +58,7 @@ export const INITIAL_TASKS: EarnTask[] = [
     category: 'special',
     completed: false,
     link: 'https://youtube.com',
-    duration: 15,
+    duration: 30,
   },
   {
     id: 'task_fb_page',

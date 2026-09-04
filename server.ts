@@ -276,6 +276,143 @@ async function startServer() {
     }
   });
 
+  // Persistent Shared Adsterra & Monetag Configuration
+  const AD_CONFIG_STORE_FILE = path.join(process.cwd(), "ad-config-store.json");
+
+  function getStoredAdConfig(): any {
+    try {
+      if (fs.existsSync(AD_CONFIG_STORE_FILE)) {
+        const raw = fs.readFileSync(AD_CONFIG_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading stored ad config:", err);
+    }
+    return null;
+  }
+
+  function saveStoredAdConfig(config: any) {
+    try {
+      fs.writeFileSync(AD_CONFIG_STORE_FILE, JSON.stringify(config, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing stored ad config:", err);
+    }
+  }
+
+  // Get current global Adsterra / Monetag ad config
+  app.get("/api/ad-config", (req, res) => {
+    const config = getStoredAdConfig();
+    res.json({ success: true, config });
+  });
+
+  // Save updated global Adsterra / Monetag ad config (Admin updated)
+  app.post("/api/ad-config", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { config } = body || {};
+    if (config && typeof config === "object") {
+      saveStoredAdConfig(config);
+      res.json({ success: true, config });
+    } else {
+      res.status(400).json({ success: false, error: "config object is required" });
+    }
+  });
+
+  // Persistent Shared Announcement / Notice Store
+  const ANNOUNCEMENT_STORE_FILE = path.join(process.cwd(), "announcement-store.json");
+
+  interface BroadcastAnnouncement {
+    id: string;
+    title: string;
+    message: string;
+    badge?: string;
+    linkUrl?: string;
+    linkText?: string;
+    actionType?: "notice" | "event" | "ad" | "task";
+    enabled: boolean;
+    updatedAt: number;
+  }
+
+  const DEFAULT_ANNOUNCEMENT: BroadcastAnnouncement = {
+    id: "notice_default",
+    title: "🎉 মেগা রিওয়ার্ড ইভেন্ট চলছে!",
+    message: "সকল টাস্ক সম্পন্ন করে প্রতিদিন ১০০+ টাকা পর্যন্ত আয় করুন। সাথে বন্ধুদের রেফার করে পান নিশ্চিত ৩০% লাইফটাইম কমিশন!",
+    badge: "মেগা অফার 🔥",
+    linkUrl: "",
+    linkText: "বিস্তারিত দেখুন",
+    actionType: "event",
+    enabled: true,
+    updatedAt: Date.now(),
+  };
+
+  function getStoredAnnouncement(): BroadcastAnnouncement {
+    try {
+      if (fs.existsSync(ANNOUNCEMENT_STORE_FILE)) {
+        const raw = fs.readFileSync(ANNOUNCEMENT_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return { ...DEFAULT_ANNOUNCEMENT, ...parsed };
+        }
+      }
+    } catch (err) {
+      console.error("Error reading stored announcement:", err);
+    }
+    return DEFAULT_ANNOUNCEMENT;
+  }
+
+  function saveStoredAnnouncement(announcement: BroadcastAnnouncement) {
+    try {
+      fs.writeFileSync(ANNOUNCEMENT_STORE_FILE, JSON.stringify(announcement, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing stored announcement:", err);
+    }
+  }
+
+  // Get current global broadcast announcement
+  app.get("/api/announcement", (req, res) => {
+    const announcement = getStoredAnnouncement();
+    res.json({ success: true, announcement });
+  });
+
+  // Save updated broadcast announcement (Admin)
+  app.post("/api/announcement", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { announcement } = body || {};
+    if (announcement && typeof announcement === "object") {
+      const updated: BroadcastAnnouncement = {
+        id: announcement.id || `notice_${Date.now()}`,
+        title: announcement.title || "",
+        message: announcement.message || "",
+        badge: announcement.badge || "",
+        linkUrl: announcement.linkUrl || "",
+        linkText: announcement.linkText || "",
+        actionType: announcement.actionType || "notice",
+        enabled: Boolean(announcement.enabled),
+        updatedAt: Date.now(),
+      };
+      saveStoredAnnouncement(updated);
+      res.json({ success: true, announcement: updated });
+    } else {
+      res.status(400).json({ success: false, error: "announcement object is required" });
+    }
+  });
+
   // Persistent Shared Leaderboard Storage
   const LEADERBOARD_STORE_FILE = path.join(process.cwd(), "leaderboard-store.json");
 
@@ -389,6 +526,57 @@ async function startServer() {
       userRank,
       rankings,
     });
+  });
+
+  // Persistent Shared System Settings Store
+  const SYSTEM_SETTINGS_STORE_FILE = path.join(process.cwd(), "system-settings-store.json");
+
+  function getStoredSystemSettings(): any {
+    try {
+      if (fs.existsSync(SYSTEM_SETTINGS_STORE_FILE)) {
+        const raw = fs.readFileSync(SYSTEM_SETTINGS_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading stored system settings:", err);
+    }
+    return null;
+  }
+
+  function saveStoredSystemSettings(settings: any) {
+    try {
+      fs.writeFileSync(SYSTEM_SETTINGS_STORE_FILE, JSON.stringify(settings, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing stored system settings:", err);
+    }
+  }
+
+  // 11. Get current system settings
+  app.get("/api/system-settings", (req, res) => {
+    const settings = getStoredSystemSettings();
+    res.json({ success: true, settings });
+  });
+
+  // 12. Save system settings (Admin)
+  app.post("/api/system-settings", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { settings } = body || {};
+    if (settings && typeof settings === "object") {
+      saveStoredSystemSettings(settings);
+      res.json({ success: true, settings });
+    } else {
+      res.status(400).json({ success: false, error: "settings object is required" });
+    }
   });
 
   // Vite middleware setup (SPA fallback)

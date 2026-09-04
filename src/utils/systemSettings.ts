@@ -1,0 +1,106 @@
+export interface SystemSettings {
+  referralReward: number;
+  referralMinDaysActive: number;
+  referralMinTasks: number;
+  dailyCheckInBaseReward: number;
+  spinCooldownHours: number;
+  spinMaxReward: number;
+  dailyScratchLimit: number;
+  telegramChannelUrl: string;
+  telegramGroupUrl: string;
+  adminSupportUsername: string;
+  howToWorkVideoUrl: string;
+  enabledMethods: {
+    bKash: boolean;
+    Nagad: boolean;
+    Rocket: boolean;
+    Binance: boolean;
+    Upay: boolean;
+    CellFin: boolean;
+  };
+  updatedAt: number;
+}
+
+const STORAGE_KEY = "smart_earning_system_settings";
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  referralReward: 20.0,
+  referralMinDaysActive: 3,
+  referralMinTasks: 20,
+  dailyCheckInBaseReward: 2.0,
+  spinCooldownHours: 8,
+  spinMaxReward: 10.0,
+  dailyScratchLimit: 5,
+  telegramChannelUrl: "https://t.me/SmartEarningBdOfficial",
+  telegramGroupUrl: "https://t.me/SmartEarningBdGroup",
+  adminSupportUsername: "@SmartEarningSupport",
+  howToWorkVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  enabledMethods: {
+    bKash: true,
+    Nagad: true,
+    Rocket: true,
+    Binance: true,
+    Upay: true,
+    CellFin: true,
+  },
+  updatedAt: Date.now(),
+};
+
+export function getSystemSettings(): SystemSettings {
+  if (typeof window === "undefined") return DEFAULT_SYSTEM_SETTINGS;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === "object") {
+        return {
+          ...DEFAULT_SYSTEM_SETTINGS,
+          ...parsed,
+          enabledMethods: {
+            ...DEFAULT_SYSTEM_SETTINGS.enabledMethods,
+            ...(parsed.enabledMethods || {}),
+          },
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Failed to parse system settings from localStorage", e);
+  }
+  return DEFAULT_SYSTEM_SETTINGS;
+}
+
+export function saveSystemSettings(settings: SystemSettings) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error("Failed to save system settings", e);
+  }
+
+  // Persist to server so all users receive updated settings
+  try {
+    fetch("/api/system-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings }),
+    }).catch(() => {});
+  } catch (err) {
+    console.error("Failed to push system settings to server:", err);
+  }
+}
+
+export async function fetchSystemSettingsFromServer(): Promise<SystemSettings> {
+  try {
+    const res = await fetch("/api/system-settings");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.settings) {
+        saveSystemSettings(data.settings);
+        return data.settings;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch system settings from server, using local:", err);
+  }
+  return getSystemSettings();
+}

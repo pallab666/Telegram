@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Layers,
+  Gift,
 } from "lucide-react";
 import { EarnTask, UserData } from "../types";
 import { triggerHaptic, openAdLink } from "../utils/telegram";
@@ -46,6 +47,7 @@ interface TasksModalProps {
   language?: 'bn' | 'en';
   preferences?: AppPreferences;
   onClaimDailyCheckIn?: (reward: number, streak: number, timestamp: number) => void;
+  onOpenScratch?: () => void;
 }
 
 const MAX_DAILY_ADS = 15;
@@ -124,6 +126,7 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   language = 'bn',
   preferences,
   onClaimDailyCheckIn,
+  onOpenScratch,
 }) => {
   const [activeTab, setActiveTab] = useState<"all" | "visit" | "special">("all");
 
@@ -143,8 +146,10 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   const [adProgressTimer, setAdProgressTimer] = useState<number>(AD_WATCH_DURATION);
   const [canClaimAdReward, setCanClaimAdReward] = useState(false);
 
-  // Task verification countdowns: taskId -> remaining seconds
-  const [verifyingTasks, setVerifyingTasks] = useState<Record<string, { remaining: number; canClaim: boolean }>>({});
+  // Task verification countdowns: taskId -> remaining seconds & progress total
+  const [verifyingTasks, setVerifyingTasks] = useState<
+    Record<string, { remaining: number; total: number; canClaim: boolean }>
+  >({});
 
   // Active Quiz Modal state
   const [activeQuizTask, setActiveQuizTask] = useState<EarnTask | null>(null);
@@ -197,6 +202,7 @@ export const TasksModal: React.FC<TasksModalProps> = ({
           if (!next[id].canClaim && next[id].remaining > 0) {
             const nextRemaining = next[id].remaining - 1;
             next[id] = {
+              ...next[id],
               remaining: nextRemaining,
               canClaim: nextRemaining === 0,
             };
@@ -357,27 +363,43 @@ export const TasksModal: React.FC<TasksModalProps> = ({
 
     // Otherwise, start task verification
     triggerHaptic("medium");
-    if (task.link) {
-      if (window.Telegram?.WebApp?.openLink) {
-        window.Telegram.WebApp.openLink(task.link);
+    if (task.link && task.link.trim()) {
+      let rawLink = task.link.trim();
+      const isTg =
+        rawLink.includes("t.me/") ||
+        rawLink.startsWith("@") ||
+        rawLink.includes("telegram.me/");
+
+      if (isTg && window.Telegram?.WebApp?.openTelegramLink) {
+        const tgFormatted = rawLink.startsWith("@")
+          ? `https://t.me/${rawLink.slice(1)}`
+          : rawLink.startsWith("http")
+          ? rawLink
+          : `https://${rawLink}`;
+        window.Telegram.WebApp.openTelegramLink(tgFormatted);
+      } else if (window.Telegram?.WebApp?.openLink) {
+        const webFormatted = rawLink.startsWith("http") ? rawLink : `https://${rawLink}`;
+        window.Telegram.WebApp.openLink(webFormatted);
       } else {
-        window.open(task.link, "_blank");
+        const webFormatted = rawLink.startsWith("http") ? rawLink : `https://${rawLink}`;
+        window.open(webFormatted, "_blank", "noopener,noreferrer");
       }
     }
 
-    const duration = task.duration || 10;
+    const duration = task.duration && task.duration > 0 ? task.duration : (task.iconType === 'telegram' || task.iconType === 'youtube' ? 30 : 10);
     setVerifyingTasks((prev) => ({
       ...prev,
       [task.id]: {
         remaining: duration,
+        total: duration,
         canClaim: false,
       },
     }));
 
     showInnerToast(
       language === "bn"
-        ? `লিংক খোলা হয়েছে। রিওয়ার্ড পেতে ${duration} সেকেন্ড অপেক্ষা করুন...`
-        : `Link opened. Wait ${duration}s to claim your reward...`
+        ? `লিংক খোলা হয়েছে। অটো-ভেরিফিকেশন টাইমার শেষ হওয়া পর্যন্ত অপেক্ষা করুন... (${duration} সে.)`
+        : `Link opened. Wait for auto-verification countdown (${duration}s)...`
     );
   };
 
@@ -571,6 +593,43 @@ export const TasksModal: React.FC<TasksModalProps> = ({
           preferences={preferences}
         />
 
+        {/* 2. LUCKY SCRATCH & WIN QUICK ENTRY */}
+        {onOpenScratch && (
+          <div
+            onClick={() => {
+              triggerHaptic("medium");
+              onOpenScratch();
+            }}
+            className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl p-3.5 mb-4 text-white shadow-md shadow-amber-500/20 flex items-center justify-between cursor-pointer border border-amber-300/40 hover:brightness-105 active:scale-[0.99] transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+                <Gift className="w-5 h-5 text-yellow-200 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-xs text-white">
+                    {language === "bn" ? "লাকি স্ক্র্যাচ কার্ড" : "Lucky Scratch & Win"}
+                  </span>
+                  <span className="bg-yellow-300 text-slate-950 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full shadow-xs">
+                    3x Daily
+                  </span>
+                </div>
+                <p className="text-[10px] text-amber-100 font-medium">
+                  {language === "bn"
+                    ? "কার্ড ঘষে তাৎক্ষণিক টাকা জিতুন!"
+                    : "Scratch card & win real cash!"}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white text-slate-900 px-3 py-1.5 rounded-xl font-black text-xs shadow-sm flex items-center gap-1 shrink-0">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>{language === "bn" ? "ঘষুন" : "Scratch"}</span>
+            </div>
+          </div>
+        )}
+
         {/* HERO CARD - Watch Ads & Earn */}
         <div className="bg-gradient-to-br from-[#8b5cf6] via-[#a855f7] to-[#d946ef] rounded-[2rem] p-5 shadow-xl shadow-purple-500/20 text-center relative overflow-hidden mb-4 border border-purple-400/30">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
@@ -739,129 +798,162 @@ export const TasksModal: React.FC<TasksModalProps> = ({
               const verification = verifyingTasks[task.id];
               const isVerifying = verification && !verification.canClaim && verification.remaining > 0;
               const isReadyToClaim = verification && verification.canClaim;
+              const totalSec = verification?.total || (task.duration || 30);
+              const progressPct = isVerifying
+                ? Math.min(100, Math.max(0, Math.round(((totalSec - verification.remaining) / totalSec) * 100)))
+                : isReadyToClaim
+                ? 100
+                : 0;
 
               return (
                 <motion.div
                   key={task.id}
                   layout
-                  className={`bg-white rounded-[1.3rem] p-3.5 flex items-center justify-between border transition-all ${
+                  className={`bg-white rounded-[1.3rem] p-3.5 flex flex-col gap-2 border transition-all relative overflow-hidden ${
                     isDone
                       ? "opacity-60 border-slate-200 bg-slate-50/70"
                       : isReadyToClaim
                       ? "border-emerald-400 bg-emerald-50/40 shadow-sm ring-2 ring-emerald-400/30"
+                      : isVerifying
+                      ? "border-blue-400 bg-blue-50/20 shadow-md ring-2 ring-blue-400/20"
                       : "border-slate-200 shadow-xs hover:border-purple-300"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    {renderIcon(task.iconType, isDone)}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {renderIcon(task.iconType, isDone)}
 
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-black text-slate-900 text-xs line-clamp-1 max-w-[160px]">
+                            {language === "bn" ? task.titleBn : task.title}
+                          </h4>
+                          {!isDone && (
+                            <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                              +৳{task.reward.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-1">
+                          {isDone ? (
+                            <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                              <Check size={12} /> {language === "bn" ? "সম্পন্ন" : "Done"}
+                            </span>
+                          ) : isVerifying ? (
+                            <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                              <Clock size={12} className="animate-spin text-blue-500" />
+                              {language === "bn"
+                                ? `অটো-ভেরিফাই হচ্ছে: ${verification.remaining} সে.`
+                                : `Auto-verifying: ${verification.remaining}s`}
+                            </span>
+                          ) : isReadyToClaim ? (
+                            <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1 animate-pulse">
+                              <Sparkles size={12} />
+                              {language === "bn" ? "রিওয়ার্ড প্রস্তুত!" : "Reward Ready!"}
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
+                              {task.iconType === "checkin" ? (
+                                <span>{language === "bn" ? "দৈনিক একবার" : "Once daily"}</span>
+                              ) : task.iconType === "quiz" ? (
+                                <span>{language === "bn" ? "সহজ কুইজ" : "Mini Quiz"}</span>
+                              ) : (
+                                <>
+                                  <Clock size={10} />
+                                  <span>
+                                    {task.duration
+                                      ? `${task.duration}s`
+                                      : task.iconType === "telegram" || task.iconType === "youtube"
+                                      ? "30s"
+                                      : "Instant"}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Task Action Button */}
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-black text-slate-900 text-xs line-clamp-1 max-w-[150px]">
-                          {language === "bn" ? task.titleBn : task.title}
-                        </h4>
-                        {!isDone && (
-                          <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                            +৳{task.reward.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-1">
-                        {isDone ? (
-                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                            <Check size={12} /> {language === "bn" ? "সম্পন্ন" : "Done"}
-                          </span>
-                        ) : isVerifying ? (
-                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
-                            <Clock size={12} />
-                            {language === "bn"
-                              ? `যাচাই হচ্ছে: ${verification.remaining} সে.`
-                              : `Verifying: ${verification.remaining}s`}
-                          </span>
-                        ) : isReadyToClaim ? (
-                          <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
-                            <Sparkles size={12} />
-                            {language === "bn" ? "রিওয়ার্ড প্রস্তুত!" : "Reward Ready!"}
-                          </span>
-                        ) : (
-                          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
-                            {task.iconType === "checkin" ? (
-                              <span>{language === "bn" ? "দৈনিক একবার" : "Once daily"}</span>
-                            ) : task.iconType === "quiz" ? (
-                              <span>{language === "bn" ? "সহজ কুইজ" : "Mini Quiz"}</span>
-                            ) : (
-                              <>
-                                <Clock size={10} />
-                                <span>{task.duration ? `${task.duration}s` : "Instant"}</span>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      {isDone ? (
+                        <div className="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-400 text-xs font-bold border border-slate-200 flex items-center gap-1">
+                          <Check size={14} />
+                          <span>{language === "bn" ? "সম্পন্ন" : "Done"}</span>
+                        </div>
+                      ) : isVerifying ? (
+                        <button
+                          disabled
+                          className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-black shadow-sm flex items-center gap-1.5 cursor-wait"
+                        >
+                          <Clock size={12} className="animate-spin" />
+                          <span>{verification.remaining}s</span>
+                        </button>
+                      ) : isReadyToClaim ? (
+                        <button
+                          onClick={() => handleTaskAction(task)}
+                          className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-sm flex items-center gap-1 active:scale-95 transition-transform cursor-pointer animate-bounce"
+                        >
+                          <Sparkles size={13} />
+                          <span>{language === "bn" ? "দাবি করুন" : "Claim"}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleTaskAction(task)}
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer ${
+                            task.iconType === "checkin"
+                              ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+                              : task.iconType === "quiz"
+                              ? "bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
+                              : task.iconType === "telegram"
+                              ? "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20"
+                              : task.iconType === "youtube"
+                              ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20"
+                              : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20"
+                          }`}
+                        >
+                          {task.iconType === "checkin" ? (
+                            <>
+                              <Award size={13} />
+                              <span>{language === "bn" ? "ক্লেম" : "Claim"}</span>
+                            </>
+                          ) : task.iconType === "quiz" ? (
+                            <>
+                              <HelpCircle size={13} />
+                              <span>{language === "bn" ? "কুইজ" : "Quiz"}</span>
+                            </>
+                          ) : task.iconType === "telegram" ? (
+                            <>
+                              <Send size={12} />
+                              <span>{language === "bn" ? "যুক্ত হোন (30s)" : "Join (30s)"}</span>
+                            </>
+                          ) : task.iconType === "youtube" ? (
+                            <>
+                              <ExternalLink size={12} />
+                              <span>{language === "bn" ? "সাবস্ক্রাইব (30s)" : "Subscribe (30s)"}</span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink size={12} />
+                              <span>{language === "bn" ? "শুরু করুন" : "Start"}</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Task Action Button */}
-                  <div>
-                    {isDone ? (
-                      <div className="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-400 text-xs font-bold border border-slate-200 flex items-center gap-1">
-                        <Check size={14} />
-                        <span>{language === "bn" ? "সম্পন্ন" : "Done"}</span>
-                      </div>
-                    ) : isVerifying ? (
-                      <button
-                        disabled
-                        className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-200 flex items-center gap-1 cursor-wait"
-                      >
-                        <Clock size={12} className="animate-spin" />
-                        <span>{verification.remaining}s</span>
-                      </button>
-                    ) : isReadyToClaim ? (
-                      <button
-                        onClick={() => handleTaskAction(task)}
-                        className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-sm flex items-center gap-1 active:scale-95 transition-transform cursor-pointer animate-bounce"
-                      >
-                        <Sparkles size={13} />
-                        <span>{language === "bn" ? "দাবি করুন" : "Claim"}</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleTaskAction(task)}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer ${
-                          task.iconType === "checkin"
-                            ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
-                            : task.iconType === "quiz"
-                            ? "bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
-                            : task.iconType === "telegram"
-                            ? "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20"
-                            : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20"
-                        }`}
-                      >
-                        {task.iconType === "checkin" ? (
-                          <>
-                            <Award size={13} />
-                            <span>{language === "bn" ? "ক্লেম" : "Claim"}</span>
-                          </>
-                        ) : task.iconType === "quiz" ? (
-                          <>
-                            <HelpCircle size={13} />
-                            <span>{language === "bn" ? "কুইজ" : "Quiz"}</span>
-                          </>
-                        ) : task.iconType === "telegram" ? (
-                          <>
-                            <Send size={12} />
-                            <span>{language === "bn" ? "যুক্ত হোন" : "Join"}</span>
-                          </>
-                        ) : (
-                          <>
-                            <ExternalLink size={12} />
-                            <span>{language === "bn" ? "শুরু করুন" : "Start"}</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
+                  {/* Dynamic Real-Time Progress Bar for Auto-Verification */}
+                  {isVerifying && (
+                    <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden mt-1">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-1000 ease-linear"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               );
             })

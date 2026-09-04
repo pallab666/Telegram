@@ -22,6 +22,7 @@ import {
   Zap,
   Landmark,
   ArrowUpRight,
+  Lock,
 } from 'lucide-react';
 import { triggerHaptic, openAdLink } from '../utils/telegram';
 import {
@@ -43,6 +44,8 @@ interface SettingsModalProps {
   onUpdatePreferences: (prefs: AppPreferences) => void;
   onOpenInitialSetup?: () => void;
   onOpenWithdraw?: () => void;
+  onOpenAdmin?: () => void;
+  pendingWithdrawalsCount?: number;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -53,6 +56,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   preferences,
   onUpdatePreferences,
   onOpenWithdraw,
+  onOpenAdmin,
+  pendingWithdrawalsCount = 0,
 }) => {
   if (!isOpen) return null;
 
@@ -616,6 +621,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+          {/* 10. Admin Panel Entry Point (At the very bottom of Settings) */}
+          {onOpenAdmin && (
+            <div className="pt-2 border-t border-slate-200/80">
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onClose();
+                  onOpenAdmin();
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl flex items-center justify-between transition-all shadow-md hover:shadow-lg border border-indigo-900/50 group cursor-pointer active:scale-[0.98]"
+                id="btn-settings-admin-panel"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 font-bold shrink-0">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    {pendingWithdrawalsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-slate-900 animate-bounce">
+                        {pendingWithdrawalsCount > 9 ? '9+' : pendingWithdrawalsCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <h4 className="text-xs font-black text-amber-300 tracking-tight flex items-center gap-1.5">
+                      <span>{isBn ? 'এডমিন প্যানেল' : 'Admin Control Panel'}</span>
+                      <span className="text-[9px] bg-amber-400/20 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-amber-400/30">
+                        PIN
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-300">
+                      {isBn ? 'সিকিউরিটি পিন দিয়ে অ্যাপ নিয়ন্ত্রণ করুন' : 'Access admin controls & user payouts'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-amber-400 text-slate-950 px-2.5 py-1 rounded-xl text-[11px] font-black shadow-sm flex items-center gap-1 shrink-0 group-hover:bg-amber-300 transition-colors">
+                  <span>{isBn ? 'প্রবেশ করুন' : 'Open'}</span>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

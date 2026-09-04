@@ -14,11 +14,14 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { BotSetupGuideModal } from './components/BotSetupGuideModal';
 import { VideoPlayerModal } from './components/VideoPlayerModal';
 import { DailySpinWheel } from './components/DailySpinWheel';
+import { ScratchCardModal } from './components/ScratchCardModal';
 import { InitialSetupModal } from './components/InitialSetupModal';
+import { LiveWithdrawalTicker } from './components/LiveWithdrawalTicker';
+import { BroadcastAnnouncementModal } from './components/BroadcastAnnouncementModal';
 import { INITIAL_USER, INITIAL_TASKS, INITIAL_VIDEOS, INITIAL_LEADERBOARD } from './data/mockData';
 import { UserData, EarnTask, VideoClip, WithdrawalRecord, ReferredUser } from './types';
 import { initTelegramApp, getTelegramUser, triggerHaptic } from './utils/telegram';
-import { getAdConfig } from './utils/adManager';
+import { getAdConfig, syncAdConfigFromServer } from './utils/adManager';
 import {
   AppPreferences,
   getAppPreferences,
@@ -27,7 +30,7 @@ import {
   markInitialSetupCompleted,
 } from './utils/preferences';
 import { initPresenceTracker } from './utils/presence';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Gift } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function App() {
@@ -216,6 +219,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isScratchOpen, setIsScratchOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<VideoClip | null>(null);
   const [highlightedVideoId, setHighlightedVideoId] = useState<string | null>(null);
 
@@ -240,6 +244,7 @@ export default function App() {
 
   useEffect(() => {
     initTelegramApp();
+    syncAdConfigFromServer();
 
     // Check if launched inside Telegram with user info
     const tgUser = getTelegramUser();
@@ -404,6 +409,20 @@ export default function App() {
     );
   };
 
+  const handleSpinReward = (amount: number) => {
+    setUser((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + amount) * 100) / 100,
+      totalEarned: Math.round((prev.totalEarned + amount) * 100) / 100,
+    }));
+    triggerCelebration();
+    showToast(
+      preferences.language === 'bn'
+        ? `🎉 স্পিন উইন! ৳${amount} মূল ব্যালেন্সে যোগ হয়েছে`
+        : `🎉 Spin Win! ৳${amount} credited to balance`
+    );
+  };
+
   // Automatic 24-hour Daily Check-in Reset Check
   useEffect(() => {
     const checkDailyReset = () => {
@@ -554,15 +573,19 @@ export default function App() {
     showToast(`✅ টাস্ক সম্পন্ন! +৳${reward.toFixed(2)} BDT যোগ হয়েছে`);
   };
 
-  const handleSpinReward = (amount: number) => {
+  const handleScratchReward = (amount: number) => {
     setUser((prev) => ({
       ...prev,
-      balance: prev.balance + amount,
-      totalEarned: prev.totalEarned + amount,
+      balance: Math.round((prev.balance + amount) * 100) / 100,
+      totalEarned: Math.round((prev.totalEarned + amount) * 100) / 100,
     }));
 
     triggerCelebration();
-    showToast(`🎡 স্পিন থেকে +৳${amount.toFixed(2)} BDT জিতেছেন!`);
+    showToast(
+      preferences.language === 'bn'
+        ? `🎁 স্ক্র্যাচ কার্ড থেকে +৳${amount.toFixed(2)} BDT মূল ব্যালেন্সে যোগ হয়েছে!`
+        : `🎁 Scratch Card reward +৳${amount.toFixed(2)} BDT added to main balance!`
+    );
   };
 
   const handleClaimMilestoneReward = (taka: number, _videos: number, milestoneFriends: number) => {
@@ -804,22 +827,46 @@ export default function App() {
             preferences={preferences}
           />
 
-          {/* 3. Promo Banner */}
-          <div className="px-4 py-2">
-            <div className="bg-white rounded-full border-2 border-pink-400 p-2 pl-4 pr-3 flex items-center justify-between shadow-sm">
+          {/* 3. Lucky Spin Wheel (8 Hours Cooldown + Adsterra Interstitial Ads) */}
+          <DailySpinWheel
+            onWinReward={handleSpinReward}
+            preferences={preferences}
+          />
+
+          {/* 4. Interactive Scratch & Win Banner */}
+          <div className="px-4 py-2" id="banner-scratch-win">
+            <div
+              onClick={() => {
+                triggerHaptic('medium');
+                setIsScratchOpen(true);
+              }}
+              className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-3xl p-3.5 text-white shadow-md shadow-amber-500/20 flex items-center justify-between cursor-pointer border border-amber-400/40 hover:brightness-105 active:scale-[0.99] transition-all"
+            >
               <div className="flex items-center gap-3">
-                <div className="flex -space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-pink-200 border border-white"></div>
-                  <div className="w-6 h-6 rounded-full bg-pink-300 border border-white"></div>
-                  <div className="w-6 h-6 rounded-full bg-pink-400 border border-white"></div>
+                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+                  <Gift className="w-6 h-6 text-yellow-200 animate-bounce" />
                 </div>
-                <span className="font-black text-[17px] text-[#6b21a8]">অনলাইন ইনকাম</span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-sm text-white">
+                      {preferences.language === 'bn' ? 'লাকি স্ক্র্যাচ কার্ড' : 'Lucky Scratch & Win'}
+                    </span>
+                    <span className="bg-yellow-300 text-slate-950 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full shadow-xs">
+                      Daily 3x
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-100 font-medium">
+                    {preferences.language === 'bn'
+                      ? 'প্রতিদিন কার্ড ঘষে নিশ্চিত নগদ টাকা জিতুন!'
+                      : 'Scratch daily & win real cash instantly!'}
+                  </p>
+                </div>
               </div>
-              <button className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 active:scale-95 transition-transform">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>
-                </svg>
-              </button>
+
+              <div className="bg-white text-slate-900 px-3 py-1.5 rounded-xl font-black text-xs shadow-sm flex items-center gap-1 shrink-0">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>{preferences.language === 'bn' ? 'ঘষুন' : 'Scratch'}</span>
+              </div>
             </div>
           </div>
 
@@ -855,6 +902,7 @@ export default function App() {
           language={preferences.language}
           preferences={preferences}
           onClaimDailyCheckIn={handleClaimDailyCheckIn}
+          onOpenScratch={() => setIsScratchOpen(true)}
         />
 
         <ReferModal
@@ -874,6 +922,10 @@ export default function App() {
           referrals={referrals}
           onAddTestReferral={handleAddTestReferral}
           onSimulateReferralProgress={handleSimulateReferralProgress}
+          onNavigate={(tab) => {
+            setIsReferOpen(false);
+            handleTabSelect(tab as NavTab);
+          }}
         />
 
         <RankModal
@@ -911,6 +963,13 @@ export default function App() {
           language={preferences.language}
         />
 
+        {/* Live Withdrawal Social Proof Ticker / Toast */}
+        <LiveWithdrawalTicker
+          preferences={preferences}
+          realWithdrawals={withdrawals}
+          onOpenWithdraw={() => setIsWithdrawOpen(true)}
+        />
+
         {/* Fixed Persistent Bottom Navigation Bar across all tabs */}
         <BottomNav activeTab={activeTab} onSelectTab={handleTabSelect} />
 
@@ -935,6 +994,10 @@ export default function App() {
           onUpdatePreferences={handleSavePreferences}
           onOpenInitialSetup={() => setIsInitialSetupOpen(true)}
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
+          onOpenAdmin={() => setIsAdminOpen(true)}
+          pendingWithdrawalsCount={
+            withdrawals.filter((w) => w.status === 'Pending').length
+          }
         />
 
         <AdminPanelModal
@@ -976,6 +1039,18 @@ export default function App() {
           onSave={handleSavePreferences}
           isFirstTime={!hasCompletedInitialSetup()}
         />
+
+        {/* Lucky Scratch & Win Modal (Daily Scratch Cards with Adsterra/Monetag Monetization) */}
+        <ScratchCardModal
+          isOpen={isScratchOpen}
+          onClose={() => setIsScratchOpen(false)}
+          onClaimReward={handleScratchReward}
+          preferences={preferences}
+          onlineCount={onlineCount}
+        />
+
+        {/* Global Admin Broadcast Announcement Modal */}
+        <BroadcastAnnouncementModal />
       </div>
     </div>
   );
