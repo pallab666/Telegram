@@ -96,3 +96,43 @@ export function openAdLink(url: string) {
     }
   }
 }
+
+export function registerTelegramUserOnServer(user: { id: number; first_name: string; username?: string }) {
+  if (!user || !user.id) return;
+  try {
+    fetch('/api/register-telegram-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId: user.id,
+        firstName: user.first_name,
+        username: user.username || '',
+      }),
+    }).catch(() => {});
+  } catch (err) {
+    console.warn('Failed to register telegram user on server:', err);
+  }
+}
+
+export async function sendTelegramNotification(payload: {
+  type: 'task' | 'video' | 'broadcast' | 'test';
+  title: string;
+  reward?: number;
+  message?: string;
+  link?: string;
+}): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/notify-telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, message: data.message || 'Notification sent' };
+    }
+  } catch (err) {
+    console.error('Error triggering telegram notification:', err);
+  }
+  return { success: false, message: 'Could not connect to server notification API' };
+}

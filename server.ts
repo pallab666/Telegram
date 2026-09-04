@@ -579,6 +579,171 @@ async function startServer() {
     }
   });
 
+  // Registered Telegram Users Store
+  const TELEGRAM_USERS_FILE = path.join(process.cwd(), "telegram-users-store.json");
+
+  function getStoredTelegramUsers(): Record<string, { chatId: number | string; firstName: string; username?: string; registeredAt: number }> {
+    try {
+      if (fs.existsSync(TELEGRAM_USERS_FILE)) {
+        const raw = fs.readFileSync(TELEGRAM_USERS_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading telegram users store:", err);
+    }
+    return {};
+  }
+
+  function saveStoredTelegramUsers(users: Record<string, any>) {
+    try {
+      fs.writeFileSync(TELEGRAM_USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing telegram users store:", err);
+    }
+  }
+
+  // 13. Register Telegram User
+  app.post("/api/register-telegram-user", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { chatId, firstName, username } = body || {};
+    if (!chatId) {
+      return res.status(400).json({ success: false, error: "chatId is required" });
+    }
+    const users = getStoredTelegramUsers();
+    users[String(chatId)] = {
+      chatId,
+      firstName: firstName || "User",
+      username: username || "",
+      registeredAt: Date.now(),
+    };
+    saveStoredTelegramUsers(users);
+    res.json({ success: true, registeredCount: Object.keys(users).length });
+  });
+
+  // 14. Send Telegram Notification API
+  app.post("/api/notify-telegram", async (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { type, title, reward, message, link } = body || {};
+
+    const sysSettings = getStoredSystemSettings() || {};
+    const botToken = sysSettings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const channelId = sysSettings.telegramChannelUsername || sysSettings.telegramChannelUrl;
+
+    if (type === "task" && sysSettings.notifyOnNewTask === false) {
+      return res.json({ success: true, message: "Task notifications disabled in settings" });
+    }
+    if (type === "video" && sysSettings.notifyOnNewVideo === false) {
+      return res.json({ success: true, message: "Video notifications disabled in settings" });
+    }
+
+    // Construct high-impact Telegram formatted HTML message
+    let text = "";
+    if (type === "task") {
+      text = `<b>🔥 নতুন ইনকাম টাস্ক যুক্ত হয়েছে! (New Task Alert)</b>\n\n` +
+        `<b>📌 শিরোনাম:</b> ${title || "নতুন টাস্ক"}\n` +
+        `<b>💰 রিওয়ার্ড:</b> ৳${reward ? Number(reward).toFixed(2) : "2.50"} BDT\n\n` +
+        `🚀 এখনই অ্যাপটি চালু করে টাস্ক সম্পন্ন করুন এবং ইনস্ট্যান্ট ক্যাশ ইনকাম করুন!`;
+    } else if (type === "video") {
+      text = `<b>🎬 নতুন মুভি/ক্লিপ ভিডিও যুক্ত হয়েছে! (New Video)</b>\n\n` +
+        `<b>📌 ভিডিও শিরোনাম:</b> ${title || "নতুন ভিডিও"}\n` +
+        `<b>🎁 বোনাস:</b> ৳${reward ? Number(reward).toFixed(2) : "3.00"} BDT\n\n` +
+        `▶️ সম্পূর্ণ ভিডিও দেখে ক্যাশ টাকা অ্যাকাউন্টে যোগ করে নিন!`;
+    } else {
+      text = `<b>📢 অফিশিয়াল ঘোষণা (Announcement)</b>\n\n` +
+        `<b>${title || "জরুরি আপডেট"}</b>\n` +
+        `${message || "স্মার্ট আর্নিং বিডি অ্যাপে নতুন আপডেট এসেছে।"}`;
+    }
+
+    let dispatchedCount = 0;
+
+    // Send to Telegram Channel and Users if Bot Token exists
+    if (botToken) {
+      const tgUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            {
+              text: "🚀 অ্যাপ চালু করে ইনকাম করুন (Open App)",
+              url: link || sysSettings.telegramChannelUrl || "https://t.me",
+            },
+          ],
+        ],
+      };
+
+      // 1. Send to Official Telegram Channel / Group
+      if (channelId) {
+        let cleanChannel = String(channelId).trim();
+        if (cleanChannel.startsWith("https://t.me/")) {
+          cleanChannel = "@" + cleanChannel.replace("https://t.me/", "").replace("/", "");
+        }
+        try {
+          await fetch(tgUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: cleanChannel,
+              text,
+              parse_mode: "HTML",
+              reply_markup: replyMarkup,
+            }),
+          });
+          dispatchedCount++;
+        } catch (err) {
+          console.error("Error sending notification to channel:", err);
+        }
+      }
+
+      // 2. Send direct notification to registered users
+      const users = getStoredTelegramUsers();
+      const userList = Object.values(users);
+
+      for (const u of userList) {
+        if (!u.chatId) continue;
+        try {
+          await fetch(tgUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: u.chatId,
+              text,
+              parse_mode: "HTML",
+              reply_markup: replyMarkup,
+            }),
+          });
+          dispatchedCount++;
+        } catch (e) {
+          // Ignore individual user dispatch errors
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: botToken
+        ? `নোটিফিকেশন সফলভাবে পাঠানো হয়েছে (${dispatchedCount} টি চ্যানেল/ইউজার)`
+        : "টেলিগ্রাম বট টোকেন সেট করা নেই, তাই অ্যাপের নোটিফিকেশন কিউ প্রসেস হয়েছে।",
+      dispatchedCount,
+    });
+  });
+
   // Vite middleware setup (SPA fallback)
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

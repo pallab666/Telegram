@@ -10,6 +10,10 @@ export interface SystemSettings {
   telegramGroupUrl: string;
   adminSupportUsername: string;
   howToWorkVideoUrl: string;
+  telegramBotToken?: string;
+  telegramChannelUsername?: string;
+  notifyOnNewTask?: boolean;
+  notifyOnNewVideo?: boolean;
   enabledMethods: {
     bKash: boolean;
     Nagad: boolean;
@@ -35,6 +39,10 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   telegramGroupUrl: "https://t.me/SmartEarningBdGroup",
   adminSupportUsername: "@SmartEarningSupport",
   howToWorkVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  telegramBotToken: "",
+  telegramChannelUsername: "@SmartEarningBdOfficial",
+  notifyOnNewTask: true,
+  notifyOnNewVideo: true,
   enabledMethods: {
     bKash: true,
     Nagad: true,

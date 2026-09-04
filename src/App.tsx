@@ -20,7 +20,7 @@ import { LiveWithdrawalTicker } from './components/LiveWithdrawalTicker';
 import { BroadcastAnnouncementModal } from './components/BroadcastAnnouncementModal';
 import { INITIAL_USER, INITIAL_TASKS, INITIAL_VIDEOS, INITIAL_LEADERBOARD } from './data/mockData';
 import { UserData, EarnTask, VideoClip, WithdrawalRecord, ReferredUser } from './types';
-import { initTelegramApp, getTelegramUser, triggerHaptic } from './utils/telegram';
+import { initTelegramApp, getTelegramUser, triggerHaptic, registerTelegramUserOnServer } from './utils/telegram';
 import { getAdConfig, syncAdConfigFromServer } from './utils/adManager';
 import {
   AppPreferences,
@@ -249,6 +249,7 @@ export default function App() {
     // Check if launched inside Telegram with user info
     const tgUser = getTelegramUser();
     if (tgUser) {
+      registerTelegramUserOnServer(tgUser);
       setUser((prev) => ({
         ...prev,
         name: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),

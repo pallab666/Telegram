@@ -49,7 +49,7 @@ import {
 import { AdminAdConfig, getAdConfig, saveAdConfig } from '../utils/adManager';
 import { getLocalAnnouncement, saveLocalAnnouncement } from '../utils/announcementManager';
 import { getSystemSettings, saveSystemSettings, SystemSettings } from '../utils/systemSettings';
-import { triggerHaptic, openAdLink } from '../utils/telegram';
+import { triggerHaptic, openAdLink, sendTelegramNotification } from '../utils/telegram';
 import { WithdrawalRecord, VideoClip, EarnTask } from '../types';
 import { INITIAL_TASKS } from '../data/mockData';
 import { playAppSound } from '../utils/preferences';
@@ -237,6 +237,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     triggerHaptic('success');
     playAppSound('reward');
     onShowToast('✅ নতুন আর্নিং টাস্ক লিংক সফলভাবে যুক্ত হয়েছে!');
+
+    // Trigger Telegram Notification for New Task
+    sendTelegramNotification({
+      type: 'task',
+      title: newTaskTitle.trim() || newTaskTitleBn.trim(),
+      reward: Number(newTaskReward) || 2.5,
+      link: formattedLink,
+    }).then((res) => {
+      if (res && res.message) {
+        onShowToast(`📢 ${res.message}`);
+      }
+    });
   };
 
   const handleDeleteTask = (taskId: string) => {
@@ -1902,6 +1914,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           setNewVideoThumb('');
                           setNewVideoUrl('');
                           onShowToast('✅ নতুন ভিডিও সফলভাবে যুক্ত করা হয়েছে!');
+
+                          // Trigger Telegram Notification for New Video
+                          sendTelegramNotification({
+                            type: 'video',
+                            title: trimmedTitle,
+                            reward: Number(newVideoReward) || 3.0,
+                            link: trimmedUrl,
+                          }).then((res) => {
+                            if (res && res.message) {
+                              onShowToast(`📢 ${res.message}`);
+                            }
+                          });
                         }
                       }}
                       className="w-full py-2.5 px-4 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition-transform cursor-pointer"
@@ -2243,7 +2267,121 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Official Community & Support Links */}
+                {/* 3. Telegram Bot & Auto-Notification Settings */}
+                <div className="bg-white rounded-2xl p-4 border border-sky-200 shadow-xs space-y-3 bg-gradient-to-br from-sky-50/50 to-white">
+                  <div className="flex items-center justify-between pb-1 border-b border-sky-100">
+                    <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                      <Send className="w-4 h-4 text-sky-600" />
+                      <span>🤖 টেলিগ্রাম বট ও অটো-নোটিফিকেশন সেটিং</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold">
+                      Telegram Bot API
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    নতুন ভিডিও বা টাস্ক অ্যাপে যোগ করার সাথে সাথে অফিশিয়াল টেলিগ্রাম চ্যানেলে ও ইউজারের নোটিফিকেশনে মেসেজ চলে যাবে।
+                  </p>
+
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        Telegram Bot Token (@BotFather থেকে প্রাপ্ত)
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.telegramBotToken || ''}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            telegramBotToken: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. 123456789:ABCdefGhIJKlmNoPQRstuVWXyz"
+                        className="w-full text-xs py-2 px-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">
+                        টেলিগ্রাম চ্যানেল ইউজারনেম/আইডি
+                      </label>
+                      <input
+                        type="text"
+                        value={sysSettings.telegramChannelUsername || ''}
+                        onChange={(e) =>
+                          setSysSettings((prev) => ({
+                            ...prev,
+                            telegramChannelUsername: e.target.value,
+                          }))
+                        }
+                        placeholder="@SmartEarningBdOfficial"
+                        className="w-full text-xs py-2 px-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:outline-none font-bold text-sky-700"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <label className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <span className="text-xs font-bold text-slate-800">
+                          🔥 নতুন টাস্ক নোটিফিকেশন
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={sysSettings.notifyOnNewTask !== false}
+                          onChange={(e) =>
+                            setSysSettings((prev) => ({
+                              ...prev,
+                              notifyOnNewTask: e.target.checked,
+                            }))
+                          }
+                          className="w-4 h-4 accent-sky-600 rounded cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <span className="text-xs font-bold text-slate-800">
+                          🎬 নতুন ভিডিও নোটিফিকেশন
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={sysSettings.notifyOnNewVideo !== false}
+                          onChange={(e) =>
+                            setSysSettings((prev) => ({
+                              ...prev,
+                              notifyOnNewVideo: e.target.checked,
+                            }))
+                          }
+                          className="w-4 h-4 accent-sky-600 rounded cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          triggerHaptic('light');
+                          saveSystemSettings(sysSettings);
+                          onShowToast('⏳ টেলিগ্রাম টেস্ট নোটিফিকেশন পাঠানো হচ্ছে...');
+                          const res = await sendTelegramNotification({
+                            type: 'test',
+                            title: '🧪 টেস্ট নোটিফিকেশন বার্তা',
+                            message: 'স্মার্ট আর্নিং বিডি অ্যাপের টেলিগ্রাম বট নোটিফিকেশন প্রসেস সফলভাবে চালু হয়েছে! 🚀',
+                          });
+                          if (res && res.message) {
+                            onShowToast(`📢 ${res.message}`);
+                          }
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>টেস্ট নোটিফিকেশন পাঠান (Send Test Telegram Alert)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Official Community & Support Links */}
                 <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-800 pb-1 border-b border-slate-100">
                     <Send className="w-4 h-4 text-sky-500" />
