@@ -581,6 +581,7 @@ async function startServer() {
 
   // Registered Telegram Users Store
   const TELEGRAM_USERS_FILE = path.join(process.cwd(), "telegram-users-store.json");
+  const REFERRALS_STORE_FILE = path.join(process.cwd(), "referrals-store.json");
 
   function getStoredTelegramUsers(): Record<string, { chatId: number | string; firstName: string; username?: string; registeredAt: number }> {
     try {
@@ -604,6 +605,93 @@ async function startServer() {
       console.error("Error writing telegram users store:", err);
     }
   }
+
+  function getStoredReferrals(): Record<string, any[]> {
+    try {
+      if (fs.existsSync(REFERRALS_STORE_FILE)) {
+        const raw = fs.readFileSync(REFERRALS_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading referrals store:", err);
+    }
+    return {};
+  }
+
+  function saveStoredReferrals(store: Record<string, any[]>) {
+    try {
+      fs.writeFileSync(REFERRALS_STORE_FILE, JSON.stringify(store, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing referrals store:", err);
+    }
+  }
+
+  // 15. Register Referred User API
+  app.post("/api/referrals/register", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { refCode, userId, name, username, telegramId } = body || {};
+    if (!refCode || !name) {
+      return res.status(400).json({ success: false, error: "refCode and name are required" });
+    }
+
+    const cleanCode = String(refCode).trim().toUpperCase();
+    const store = getStoredReferrals();
+    const list = store[cleanCode] || [];
+
+    const existingIndex = list.findIndex(
+      (r: any) => (userId && r.id === userId) || (telegramId && r.telegramId === telegramId)
+    );
+
+    const nowStr = new Date().toLocaleDateString("bn-BD");
+
+    if (existingIndex >= 0) {
+      // update existing
+      list[existingIndex].name = name;
+      list[existingIndex].username = username ? (username.startsWith("@") ? username : `@${username}`) : list[existingIndex].username;
+    } else {
+      // add new referred friend with real details
+      const newRefUser = {
+        id: userId || `ref_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        telegramId: telegramId || null,
+        name: String(name).trim(),
+        username: username ? (username.startsWith("@") ? username : `@${username}`) : "@user",
+        joinedDate: nowStr,
+        daysActive: 1,
+        tasksCompleted: 1,
+        status: "pending",
+        rewardAmount: 100,
+        isTransferredToMain: false,
+        createdAt: Date.now(),
+      };
+      list.unshift(newRefUser);
+    }
+
+    store[cleanCode] = list;
+    saveStoredReferrals(store);
+    res.json({ success: true, referrals: list });
+  });
+
+  // 16. Get Referrals by Ref Code API
+  app.get("/api/referrals", (req, res) => {
+    const refCode = req.query.refCode as string;
+    if (!refCode) {
+      return res.status(400).json({ success: false, error: "refCode is required" });
+    }
+    const cleanCode = String(refCode).trim().toUpperCase();
+    const store = getStoredReferrals();
+    const list = store[cleanCode] || [];
+    res.json({ success: true, referrals: list });
+  });
 
   // 13. Register Telegram User
   app.post("/api/register-telegram-user", (req, res) => {

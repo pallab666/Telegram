@@ -89,11 +89,11 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
               }}
             />
           </div>
-          <div className="text-left hidden xs:block">
-            <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[100px]">
+          <div className="text-left">
+            <div className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[120px]">
               {user.name}
             </div>
-            <div className="text-[10px] text-slate-400">@{user.username}</div>
+            <div className="text-[10px] text-slate-400 truncate max-w-[120px]">@{user.username}</div>
           </div>
         </button>
 

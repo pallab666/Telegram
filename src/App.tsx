@@ -201,19 +201,7 @@ export default function App() {
         }
       }
     } catch (e) {}
-    return [
-      {
-        id: 'ref_sample_1',
-        name: 'সাব্বির হোসেন',
-        username: '@sabbir_pro',
-        joinedDate: '০১/০৯/২০২৬',
-        daysActive: 2,
-        tasksCompleted: 14,
-        status: 'pending',
-        rewardAmount: 100,
-        isTransferredToMain: false,
-      },
-    ];
+    return [];
   });
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -277,6 +265,26 @@ export default function App() {
       // ignore
     }
 
+    // Register this user under their inviter's referral code on server
+    const inviterRefCode = localStorage.getItem('smart_earning_referred_by');
+    if (inviterRefCode) {
+      const tgUser = getTelegramUser();
+      const userNameToRegister = tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : user.name;
+      const userHandleToRegister = tgUser?.username || user.username;
+
+      fetch('/api/referrals/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refCode: inviterRefCode,
+          userId: user.id,
+          name: userNameToRegister,
+          username: userHandleToRegister,
+          telegramId: user.telegramId || tgUser?.id,
+        }),
+      }).catch(() => {});
+    }
+
     // Check if launched inside Telegram with user info
     const tgUser = getTelegramUser();
     if (tgUser) {
@@ -326,6 +334,33 @@ export default function App() {
     localStorage.setItem('smart_earning_withdrawals', JSON.stringify(withdrawals));
   }, [withdrawals]);
 
+  // Fetch real server-registered referrals for the active user's referral code
+  useEffect(() => {
+    if (!user.referralCode) return;
+
+    const fetchRealReferrals = async () => {
+      try {
+        const res = await fetch(`/api/referrals?refCode=${encodeURIComponent(user.referralCode)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.referrals)) {
+            setReferrals(data.referrals);
+            setUser((prev) => ({
+              ...prev,
+              referralsCount: data.referrals.length,
+            }));
+          }
+        }
+      } catch (e) {
+        // network fallback
+      }
+    };
+
+    fetchRealReferrals();
+    const refInterval = setInterval(fetchRealReferrals, 8000);
+    return () => clearInterval(refInterval);
+  }, [user.referralCode]);
+
   useEffect(() => {
     localStorage.setItem('smart_earning_referrals', JSON.stringify(referrals));
   }, [referrals]);
@@ -333,26 +368,33 @@ export default function App() {
   const handleAddTestReferral = () => {
     const sampleNames = ['তানভীর আহমেদ', 'মেহেদী হাসান', 'সুমাইয়া আক্তার', 'আরিফ হোসেন', 'নাদিম ইসলাম', 'রাকিব খান'];
     const randomName = sampleNames[Math.floor(Math.random() * sampleNames.length)];
-    const newRef: ReferredUser = {
-      id: `ref_${Date.now()}`,
-      name: randomName,
-      username: `@user_${Math.floor(1000 + Math.random() * 9000)}`,
-      joinedDate: new Date().toLocaleDateString(preferences.language === 'bn' ? 'bn-BD' : 'en-US'),
-      daysActive: 1,
-      tasksCompleted: Math.floor(Math.random() * 4) + 1,
-      status: 'pending',
-      rewardAmount: 100,
-      isTransferredToMain: false,
-    };
-    setReferrals((prev) => [newRef, ...prev]);
-    setUser((prev) => ({
-      ...prev,
-      referralsCount: prev.referralsCount + 1,
-    }));
+    const randomUsername = `user_${Math.floor(1000 + Math.random() * 9000)}`;
+
+    fetch('/api/referrals/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refCode: user.referralCode,
+        name: randomName,
+        username: randomUsername,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.referrals)) {
+          setReferrals(data.referrals);
+          setUser((prev) => ({
+            ...prev,
+            referralsCount: data.referrals.length,
+          }));
+        }
+      })
+      .catch(() => {});
+
     showToast(
       preferences.language === 'bn'
-        ? `🎁 নতুন রেফারেল যোগ হয়েছে! শর্ত (৩ দিন ও ২০ টাস্ক) পূরণ হলে ৳১০০ মূল ব্যালেন্সে যোগ হবে`
-        : `🎁 New referral joined! ৳100 pending verification.`
+        ? `🎁 টেস্ট রেফারেল যোগ হয়েছে! শর্ত (৩ দিন ও ২০ টাস্ক) পূরণ হলে ৳১০০ মূল ব্যালেন্সে যোগ হবে`
+        : `🎁 Test referral joined! ৳100 pending verification.`
     );
   };
 
