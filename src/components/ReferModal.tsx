@@ -363,7 +363,7 @@ export const ReferModal: React.FC<ReferModalProps> = ({
           <X size={24} />
         </button>
         <div className="flex items-center gap-2 font-black text-lg tracking-wide">
-          🎁 Smart Earning 💸
+          👥 {language === 'bn' ? 'রেফার ও ইনভাইট' : 'Refer & Invite'}
         </div>
         <div className="flex items-center gap-1.5">
           <ChevronDown size={24} className="opacity-80" />

@@ -69,7 +69,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           <X size={24} />
         </button>
         <div className="flex items-center gap-2 font-black text-[17px] tracking-wide">
-          🎁 Smart Earning 💸
+          👤 {language === 'bn' ? 'মাই প্রোফাইল' : 'My Profile'}
         </div>
         <div className="flex items-center gap-1.5">
           <ChevronDown size={24} className="opacity-80" />
@@ -80,11 +80,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       {/* Blue Profile Banner */}
       <div className="bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#3b82f6] px-4 py-3 flex items-center justify-between shadow-md rounded-b-[1.5rem] relative z-10">
         {/* Avatar */}
-        <div className="w-12 h-12 rounded-full border-2 border-[#fde047] overflow-hidden shadow-sm">
+        <div className="w-12 h-12 rounded-full border-2 border-[#fde047] overflow-hidden shadow-sm bg-slate-200">
           <img
             src={user.avatarUrl}
-            alt="Avatar"
+            alt={user.name}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.telegramId || user.username || 'user'}`;
+            }}
           />
         </div>
 
@@ -110,17 +113,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         {/* Main Hero Card */}
         <div className="bg-gradient-to-br from-[#7e22ce] via-[#8b5cf6] to-[#6b21a8] rounded-[2rem] p-6 shadow-xl shadow-purple-900/10 text-center relative mx-4 mb-5">
           {/* Large Center Avatar */}
-          <div className="w-[100px] h-[100px] rounded-full border-4 border-white mx-auto overflow-hidden mb-3 shadow-lg">
+          <div className="w-[100px] h-[100px] rounded-full border-4 border-white mx-auto overflow-hidden mb-3 shadow-lg bg-purple-900/40">
             <img
               src={user.avatarUrl}
-              alt="Avatar"
+              alt={user.name}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.telegramId || user.username || 'user'}`;
+              }}
             />
           </div>
 
-          <h2 className="text-[30px] font-black text-white mb-2 leading-none drop-shadow-sm">
+          <h2 className="text-[28px] font-black text-white mb-1 leading-none drop-shadow-sm">
             {user.name}
           </h2>
+          <div className="text-purple-200 font-bold text-xs mb-3">
+            @{user.username}
+          </div>
 
           <div className="bg-white/20 text-white text-[13px] font-bold px-5 py-2 rounded-full inline-flex items-center gap-1.5 mb-5 backdrop-blur-sm border border-white/10 shadow-inner">
             Balance{" "}

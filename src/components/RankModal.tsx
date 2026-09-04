@@ -310,7 +310,7 @@ export const RankModal: React.FC<RankModalProps> = ({
           <X size={24} />
         </button>
         <div className="flex items-center gap-2 font-black text-[17px] tracking-wide">
-          🎁 Smart Earning 💸
+          🏆 {language === 'bn' ? 'লিডারবোর্ড র‌্যাঙ্ক' : 'Leaderboard'}
         </div>
         <div className="flex items-center gap-1.5">
           <ChevronDown size={24} className="opacity-80" />

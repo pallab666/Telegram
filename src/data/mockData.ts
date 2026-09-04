@@ -1,18 +1,18 @@
 import { EarnTask, LeaderboardRank, UserData, VideoClip } from '../types';
 
 export const INITIAL_USER: UserData = {
-  id: 'usr_882910',
-  telegramId: 582910284,
-  name: 'Md. Tanvir Hossain',
-  username: 'tanvir_dev',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-  balance: 5.00,
+  id: 'usr_guest',
+  telegramId: undefined,
+  name: 'ইউজার',
+  username: 'user_member',
+  avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+  balance: 0.00,
   minWithdraw: 1000.00,
-  totalEarned: 5.00,
+  totalEarned: 0.00,
   totalWithdrawn: 0.00,
-  referralCode: 'SMART8829',
+  referralCode: 'REF_MEMBER',
   referralsCount: 0,
-  phone: '01712345678',
+  phone: '',
   dailyCheckedIn: false,
 };
 

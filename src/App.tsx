@@ -41,6 +41,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        // Clean legacy dummy user data ('Md. Tanvir Hossain', 'tanvir_dev', or female unsplash avatar)
+        const isDummyTanvir = parsed.name === 'Md. Tanvir Hossain' || parsed.username === 'tanvir_dev' || parsed.id === 'usr_882910';
+        const userName = isDummyTanvir ? 'ইউজার' : (parsed.name || 'ইউজার');
+        const userUsername = isDummyTanvir ? 'user_member' : (parsed.username || 'user_member');
+        const userAvatar = (isDummyTanvir || !parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb'))
+          ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'
+          : parsed.avatarUrl;
+
         // Clean legacy mock referrals (if default mock was 2)
         const cleanedReferrals =
           parsed.referralsCount === 2 && !parsed.hasRealReferrals
@@ -50,10 +58,13 @@ export default function App() {
         // Ensure user has their own unique referral code
         const refCode = (parsed.referralCode && parsed.referralCode !== 'SMART8829' && (parsed.referralCode.includes('_') || (parsed.telegramId && parsed.referralCode.includes(String(parsed.telegramId)))))
           ? parsed.referralCode
-          : generateUniqueReferralCode({ telegramId: parsed.telegramId, username: parsed.username, name: parsed.name });
+          : generateUniqueReferralCode({ telegramId: parsed.telegramId, username: userUsername, name: userName });
 
         return {
           ...parsed,
+          name: userName,
+          username: userUsername,
+          avatarUrl: userAvatar,
           referralCode: refCode,
           referralsCount: cleanedReferrals,
           minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 1000,
@@ -291,19 +302,25 @@ export default function App() {
     if (tgUser) {
       registerTelegramUserOnServer(tgUser);
       setUser((prev) => {
-        const fullName = `${tgUser.first_name} ${tgUser.last_name || ''}`.trim();
+        const fullName = `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() || 'ইউজার';
         const currentHasTelegramId = prev.referralCode && prev.referralCode.includes(String(tgUser.id));
         const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829' && currentHasTelegramId)
           ? prev.referralCode
           : generateUniqueReferralCode({ telegramId: tgUser.id, username: tgUser.username, name: fullName });
 
+        // Clean user avatar (if photo_url exists use it, otherwise generate personalized avatar for user)
+        const prevIsFemaleDummy = !prev.avatarUrl || prev.avatarUrl.includes('photo-1534528741775-53994a69daeb');
+        const dynamicAvatar = tgUser.photo_url || (prevIsFemaleDummy ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}` : prev.avatarUrl);
+
+        const cleanUsername = tgUser.username || (prev.username && prev.username !== 'tanvir_dev' && prev.username !== 'user_member' ? prev.username : `user_${tgUser.id}`);
+
         return {
           ...prev,
           id: `tg_${tgUser.id}`,
           name: fullName,
-          username: tgUser.username || prev.username || `user_${tgUser.id}`,
+          username: cleanUsername,
           telegramId: tgUser.id,
-          avatarUrl: tgUser.photo_url || prev.avatarUrl,
+          avatarUrl: dynamicAvatar,
           referralCode: newRefCode,
         };
       });

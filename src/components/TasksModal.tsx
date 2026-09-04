@@ -516,7 +516,7 @@ export const TasksModal: React.FC<TasksModalProps> = ({
           <X size={24} />
         </button>
         <div className="flex items-center gap-2 font-black text-lg tracking-wide">
-          🎁 Smart Earning 💸
+          ⚡ {language === "bn" ? "ইনকাম টাস্কসমূহ" : "Earn Tasks"}
         </div>
         <div className="flex items-center gap-1.5">
           <ChevronDown size={24} className="opacity-80" />
