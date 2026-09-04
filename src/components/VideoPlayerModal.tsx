@@ -18,16 +18,30 @@ interface VideoPlayerModalProps {
 function getEmbedUrl(url: string) {
   if (!url) return '';
   try {
+    let videoId = '';
+    
     if (url.includes('youtube.com/watch')) {
       const urlObj = new URL(url);
-      const v = urlObj.searchParams.get('v');
-      return `https://www.youtube.com/embed/${v}?autoplay=1`;
+      videoId = urlObj.searchParams.get('v') || '';
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/shorts/')) {
+      videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/live/')) {
+      videoId = url.split('youtube.com/live/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/embed/')) {
+      // It's already an embed URL, just ensure autoplay
+      return url.includes('autoplay=1') ? url : `${url}${url.includes('?') ? '&' : '?'}autoplay=1`;
     }
-    if (url.includes('youtu.be/')) {
-      const v = url.split('youtu.be/')[1].split('?')[0];
-      return `https://www.youtube.com/embed/${v}?autoplay=1`;
+    
+    if (videoId) {
+      // Remove any trailing slashes or extra path segments just in case
+      videoId = videoId.split('/')[0];
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn("Failed to parse YouTube URL", e);
+  }
   return url;
 }
 
