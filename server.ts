@@ -195,6 +195,202 @@ async function startServer() {
     res.json({ success: true, videos });
   });
 
+  // 9. Increment view count for a video when reward is claimed
+  app.post("/api/videos/:id/view", (req, res) => {
+    const { id } = req.params;
+    let videos = getStoredVideos();
+    let updatedVideo: any = null;
+    videos = videos.map((v: any) => {
+      if (v.id === id) {
+        let currentViews = 0;
+        if (typeof v.viewCount === "number") {
+          currentViews = v.viewCount;
+        } else if (typeof v.views === "number") {
+          currentViews = v.views;
+        } else if (typeof v.views === "string") {
+          const parsed = parseInt(v.views.replace(/[^0-9]/g, ""), 10);
+          currentViews = isNaN(parsed) ? 0 : parsed;
+        }
+        const newCount = currentViews + 1;
+        updatedVideo = {
+          ...v,
+          viewCount: newCount,
+          views: newCount,
+        };
+        return updatedVideo;
+      }
+      return v;
+    });
+    saveStoredVideos(videos);
+    res.json({ success: true, video: updatedVideo, videos });
+  });
+
+  // Persistent Shared Tasks Storage (Admin configured tasks and links)
+  const TASKS_STORE_FILE = path.join(process.cwd(), "tasks-store.json");
+
+  function getStoredTasks(): any[] | null {
+    try {
+      if (fs.existsSync(TASKS_STORE_FILE)) {
+        const raw = fs.readFileSync(TASKS_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading stored tasks:", err);
+    }
+    return null;
+  }
+
+  function saveStoredTasks(tasksList: any[]) {
+    try {
+      fs.writeFileSync(TASKS_STORE_FILE, JSON.stringify(tasksList, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing stored tasks:", err);
+    }
+  }
+
+  // Get all tasks
+  app.get("/api/tasks", (req, res) => {
+    const tasks = getStoredTasks();
+    res.json({ success: true, tasks });
+  });
+
+  // Save/update tasks and links (Admin updated)
+  app.post("/api/tasks", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { tasks: tasksList } = body || {};
+    if (Array.isArray(tasksList)) {
+      saveStoredTasks(tasksList);
+      res.json({ success: true, tasks: tasksList });
+    } else {
+      res.status(400).json({ success: false, error: "tasks array is required" });
+    }
+  });
+
+  // Persistent Shared Leaderboard Storage
+  const LEADERBOARD_STORE_FILE = path.join(process.cwd(), "leaderboard-store.json");
+
+  interface LeaderboardEntry {
+    id: string;
+    name: string;
+    username?: string;
+    avatarUrl?: string;
+    balance: number;
+    totalEarned: number;
+    referralsCount: number;
+    tasksCompleted: number;
+    updatedAt: number;
+  }
+
+  function getStoredLeaderboard(): LeaderboardEntry[] {
+    try {
+      if (fs.existsSync(LEADERBOARD_STORE_FILE)) {
+        const raw = fs.readFileSync(LEADERBOARD_STORE_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          // ensure no dummy entries
+          return parsed.filter((item) => item && item.id && item.name && item.name !== "SSDR");
+        }
+      }
+    } catch (err) {
+      console.error("Error reading stored leaderboard:", err);
+    }
+    return [];
+  }
+
+  function saveStoredLeaderboard(data: LeaderboardEntry[]) {
+    try {
+      fs.writeFileSync(LEADERBOARD_STORE_FILE, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error writing stored leaderboard:", err);
+    }
+  }
+
+  // 9. Sync user stats to shared real leaderboard
+  app.post("/api/leaderboard/sync", (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { id, name, username, avatarUrl, balance, totalEarned, referralsCount, tasksCompleted } = body || {};
+    if (!id || !name) {
+      return res.status(400).json({ success: false, error: "id and name are required" });
+    }
+
+    const leaderboard = getStoredLeaderboard();
+    const existingIndex = leaderboard.findIndex((item) => item.id === id);
+    const entry: LeaderboardEntry = {
+      id: String(id),
+      name: String(name),
+      username: username ? String(username) : undefined,
+      avatarUrl: avatarUrl ? String(avatarUrl) : undefined,
+      balance: Math.max(0, Number(balance) || 0),
+      totalEarned: Math.max(0, Number(totalEarned) || 0),
+      referralsCount: Math.max(0, Number(referralsCount) || 0),
+      tasksCompleted: Math.max(0, Number(tasksCompleted) || 0),
+      updatedAt: Date.now(),
+    };
+
+    if (existingIndex >= 0) {
+      leaderboard[existingIndex] = { ...leaderboard[existingIndex], ...entry };
+    } else {
+      leaderboard.push(entry);
+    }
+
+    saveStoredLeaderboard(leaderboard);
+    res.json({ success: true, entry });
+  });
+
+  // 10. Get leaderboard rankings
+  app.get("/api/leaderboard", (req, res) => {
+    const category = (req.query.category as string) || "refs"; // "refs" | "earnings" | "unlocks"
+    const period = (req.query.period as string) || "daily";
+    const currentUserId = req.query.userId as string;
+
+    const allEntries = getStoredLeaderboard();
+
+    // Sort according to requested category
+    const sorted = [...allEntries];
+    if (category === "earnings") {
+      sorted.sort((a, b) => b.balance - a.balance || b.totalEarned - a.totalEarned);
+    } else if (category === "unlocks") {
+      sorted.sort((a, b) => b.tasksCompleted - a.tasksCompleted || b.referralsCount - a.referralsCount);
+    } else {
+      // Default: refs
+      sorted.sort((a, b) => b.referralsCount - a.referralsCount || b.balance - a.balance);
+    }
+
+    const rankings = sorted.map((item, index) => ({
+      rank: index + 1,
+      ...item,
+      isCurrentUser: currentUserId ? item.id === currentUserId : false,
+    }));
+
+    const userRank = currentUserId ? rankings.find((r) => r.id === currentUserId) || null : null;
+
+    res.json({
+      success: true,
+      category,
+      period,
+      totalParticipants: rankings.length,
+      userRank,
+      rankings,
+    });
+  });
+
   // Vite middleware setup (SPA fallback)
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

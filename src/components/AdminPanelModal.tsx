@@ -29,10 +29,22 @@ import {
   RefreshCw,
   Send,
   Play,
+  Link2,
+  Plus,
+  Trash2,
+  Globe,
+  Sparkles,
+  HelpCircle,
+  Award,
+  CheckCircle,
+  Smartphone,
+  Save,
+  Radio,
 } from 'lucide-react';
 import { AdminAdConfig, getAdConfig, saveAdConfig } from '../utils/adManager';
 import { triggerHaptic, openAdLink } from '../utils/telegram';
-import { WithdrawalRecord, VideoClip } from '../types';
+import { WithdrawalRecord, VideoClip, EarnTask } from '../types';
+import { INITIAL_TASKS } from '../data/mockData';
 import { playAppSound } from '../utils/preferences';
 
 interface AdminPanelModalProps {
@@ -47,6 +59,8 @@ interface AdminPanelModalProps {
   onAddVideo?: (video: VideoClip) => void;
   onDeleteVideo?: (id: string) => void;
   onlineCount?: number;
+  tasks?: EarnTask[];
+  onUpdateTasks?: (tasks: EarnTask[]) => void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -61,6 +75,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onAddVideo,
   onDeleteVideo,
   onlineCount = 1,
+  tasks = [],
+  onUpdateTasks,
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
@@ -70,8 +86,175 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newPin, setNewPin] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
-  // Admin section tabs: 'withdrawals' | 'ads' | 'videos'
-  const [adminTab, setAdminTab] = useState<'withdrawals' | 'ads' | 'videos'>('withdrawals');
+  // Admin section tabs: 'withdrawals' | 'earnLinks' | 'ads' | 'videos'
+  const [adminTab, setAdminTab] = useState<'withdrawals' | 'earnLinks' | 'ads' | 'videos'>('withdrawals');
+
+  // Earn Tasks state
+  const [editableTasks, setEditableTasks] = useState<EarnTask[]>(() => {
+    if (tasks && tasks.length > 0) return tasks;
+    return INITIAL_TASKS;
+  });
+
+  const [testingLinkId, setTestingLinkId] = useState<string | null>(null);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [taskFilterCategory, setTaskFilterCategory] = useState<'all' | 'visit' | 'special'>('all');
+
+  // New Custom Task form states
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskTitleBn, setNewTaskTitleBn] = useState('');
+  const [newTaskLink, setNewTaskLink] = useState('');
+  const [newTaskReward, setNewTaskReward] = useState('2.50');
+  const [newTaskDuration, setNewTaskDuration] = useState('15');
+  const [newTaskIconType, setNewTaskIconType] = useState<EarnTask['iconType']>('web');
+  const [newTaskCategory, setNewTaskCategory] = useState<string>('visit');
+
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      setEditableTasks(tasks);
+    }
+  }, [tasks]);
+
+  const handleUpdateTaskLink = (taskId: string, newLink: string) => {
+    setEditableTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, link: newLink } : t))
+    );
+  };
+
+  const handleUpdateTaskReward = (taskId: string, newReward: number) => {
+    setEditableTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, reward: newReward } : t))
+    );
+  };
+
+  const handleUpdateTaskDuration = (taskId: string, newDuration: number) => {
+    setEditableTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, duration: newDuration } : t))
+    );
+  };
+
+  const handleUpdateTaskTitleBn = (taskId: string, newTitleBn: string) => {
+    setEditableTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, titleBn: newTitleBn } : t))
+    );
+  };
+
+  const handleUpdateTaskTitle = (taskId: string, newTitle: string) => {
+    setEditableTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, title: newTitle } : t))
+    );
+  };
+
+  const handleSaveEarnLinks = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    triggerHaptic('success');
+    playAppSound('win');
+
+    if (onUpdateTasks) {
+      onUpdateTasks(editableTasks);
+    }
+    // Also save config in case ad URL was modified
+    saveAdConfig(config);
+
+    setShowSuccessBanner(true);
+    onShowToast('✅ Earn সেকশনের সকল টাস্ক ও লিংক সফলভাবে সেভ হয়েছে!');
+
+    setTimeout(() => {
+      setShowSuccessBanner(false);
+    }, 4000);
+  };
+
+  const handleResetDefaultTasks = () => {
+    if (window.confirm('আপনি কি নিশ্চিত যে Earn সেকশনের সব লিংক ডিফল্ট অবস্থায় ফিরিয়ে নিতে চান?')) {
+      triggerHaptic('medium');
+      setEditableTasks(INITIAL_TASKS);
+      if (onUpdateTasks) {
+        onUpdateTasks(INITIAL_TASKS);
+      }
+      onShowToast('🔄 সকল টাস্ক লিংক ডিফল্ট অবস্থায় রিস্টোর হয়েছে');
+    }
+  };
+
+  const handleAddNewTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitleBn.trim() && !newTaskTitle.trim()) {
+      alert('টাস্কের নাম দিন');
+      return;
+    }
+    if (!newTaskLink.trim()) {
+      alert('টাস্কের লিংক (URL) দিন');
+      return;
+    }
+
+    let formattedLink = newTaskLink.trim();
+    if (
+      !formattedLink.startsWith('http://') &&
+      !formattedLink.startsWith('https://') &&
+      !formattedLink.startsWith('tg://')
+    ) {
+      formattedLink = `https://${formattedLink}`;
+    }
+
+    const newTask: EarnTask = {
+      id: `task_custom_${Date.now()}`,
+      title: newTaskTitle.trim() || newTaskTitleBn.trim(),
+      titleBn: newTaskTitleBn.trim() || newTaskTitle.trim(),
+      reward: Number(newTaskReward) || 2.5,
+      iconType: newTaskIconType,
+      category: newTaskCategory,
+      completed: false,
+      link: formattedLink,
+      duration: Number(newTaskDuration) || 15,
+    };
+
+    const updated = [...editableTasks, newTask];
+    setEditableTasks(updated);
+    if (onUpdateTasks) {
+      onUpdateTasks(updated);
+    }
+
+    setNewTaskTitle('');
+    setNewTaskTitleBn('');
+    setNewTaskLink('');
+    setNewTaskReward('2.50');
+    setNewTaskDuration('15');
+    setIsAddingTask(false);
+
+    triggerHaptic('success');
+    playAppSound('reward');
+    onShowToast('✅ নতুন আর্নিং টাস্ক লিংক সফলভাবে যুক্ত হয়েছে!');
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    triggerHaptic('warning');
+    const updated = editableTasks.filter((t) => t.id !== taskId);
+    setEditableTasks(updated);
+    if (onUpdateTasks) {
+      onUpdateTasks(updated);
+    }
+    onShowToast('টাস্ক মুছে ফেলা হয়েছে');
+  };
+
+  const handleTestLink = (url?: string, id?: string) => {
+    if (!url || !url.trim()) {
+      onShowToast('⚠️ কোনো লিংক দেওয়া নেই');
+      return;
+    }
+    triggerHaptic('light');
+    if (id) {
+      setTestingLinkId(id);
+      setTimeout(() => setTestingLinkId(null), 2000);
+    }
+    let target = url.trim();
+    if (
+      !target.startsWith('http://') &&
+      !target.startsWith('https://') &&
+      !target.startsWith('tg://')
+    ) {
+      target = `https://${target}`;
+    }
+    window.open(target, '_blank', 'noopener,noreferrer');
+    onShowToast(`🔗 লিংক টেস্ট খোলা হয়েছে: ${target.slice(0, 32)}...`);
+  };
 
   // Withdrawals management state
   const [statusFilter, setStatusFilter] = useState<'all' | 'Pending' | 'Approved' | 'Rejected'>('all');
@@ -255,7 +438,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-sm ">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-slate-900/70 backdrop-blur-sm">
       <div className="relative w-full max-w-md max-h-[92vh] bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Top Header */}
         <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800 text-white flex-shrink-0">
@@ -354,14 +537,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         ) : (
           /* AUTHENTICATED ADMIN DASHBOARD */
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-            {/* Top Navigation Bar: Withdrawals vs Ads & Settings */}
-            <div className="flex bg-slate-900 px-3 pt-2 gap-2 border-b border-slate-800 flex-shrink-0">
+            {/* Top Navigation Bar: Withdrawals vs Earn Links vs Ads & Settings vs Videos */}
+            <div className="flex bg-slate-900 px-2 pt-2 gap-1 border-b border-slate-800 flex-shrink-0 overflow-x-auto no-scrollbar">
               <button
                 onClick={() => {
                   triggerHaptic('light');
                   setAdminTab('withdrawals');
                 }}
-                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'withdrawals'
                     ? 'border-emerald-500 text-emerald-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -379,16 +562,31 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <button
                 onClick={() => {
                   triggerHaptic('light');
+                  setAdminTab('earnLinks');
+                }}
+                className={`flex-1 min-w-[82px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                  adminTab === 'earnLinks'
+                    ? 'border-purple-500 text-purple-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Link2 className="w-3.5 h-3.5 text-purple-400" />
+                <span>আর্নিং লিংক</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
                   setAdminTab('ads');
                 }}
-                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'ads'
                     ? 'border-amber-500 text-amber-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>অ্যাড ও সেটিংস</span>
+                <span>বিজ্ঞাপন</span>
               </button>
 
               <button
@@ -396,14 +594,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   triggerHaptic('light');
                   setAdminTab('videos');
                 }}
-                className={`flex-1 flex items-center justify-center gap-1.5 pb-2.5 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 min-w-[65px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'videos'
                     ? 'border-pink-500 text-pink-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Play className="w-3.5 h-3.5" />
-                <span>ভিডিও আপলোড</span>
+                <span>ভিডিও</span>
               </button>
             </div>
 
@@ -803,6 +1001,395 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       );
                     })
                   )}
+                </div>
+              </div>
+            ) : adminTab === 'earnLinks' ? (
+              /* TAB 2: EARN SECTION LINKS & TASKS CONTROL */
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                {/* Success Notification Banner */}
+                {showSuccessBanner && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-2.5 text-emerald-900 text-xs font-bold animate-in fade-in shadow-sm">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                    <div>
+                      <p>Earn সেকশনের সকল টাস্ক ও লিংক সফলভাবে সেভ হয়েছে!</p>
+                      <p className="text-[10px] font-normal text-emerald-700">ব্যবহারকারীরা এখন নতুন লিংকে সরাসরি প্রবেশ করবে।</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Explanatory Info Card */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 text-purple-950 space-y-1.5 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
+                      <Link2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-purple-950">
+                        Earn সেকশনের লিংক কন্ট্রোল প্যানেল
+                      </h4>
+                      <p className="text-[10px] text-purple-700">
+                        টেলিগ্রাম, ইউটিউব, ফেসবুক ও স্পন্সর ওয়েবসাইট লিংক পরিবর্তন করুন
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-purple-900/90 leading-relaxed pt-1">
+                    ইউজারদের অ্যাপের Earn স্ক্রিনে যে সোশ্যাল ও ওয়েব ভিজিট লিংকগুলো থাকে, সেগুলো আপনি যেকোনো সময় এখান থেকে পরিবর্তন করতে পারেন। লিংক দেওয়ার পর <span className="font-bold text-purple-700">"টেস্ট"</span> বাটনে চাপ দিয়ে যাচাই করতে পারবেন। পরিবর্তন শেষে নিচের <span className="font-bold text-purple-700">"সব লিংক সেভ করুন"</span> বাটনে চাপুন।
+                  </p>
+                </div>
+
+                {/* 1. Watch Ads Card Direct Ad Link (Top Hero Card in Earn Section) */}
+                <div className="bg-white p-3.5 rounded-2xl border border-amber-200/90 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center font-black">
+                        📺
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                          <span>বিজ্ঞাপন দেখুন ও আয় করুন লিংক (Watch Ads URL)</span>
+                          <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded-md">
+                            Earn Hero Card
+                          </span>
+                        </h4>
+                        <p className="text-[10px] text-slate-500">
+                          Earn স্ক্রিনের শীর্ষভাগের বোনাস ভিডিও/অ্যাড কার্ডের ডিরেক্ট লিংক
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      ৳১.৫০
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Direct Ad URL (Adsterra / Monetag / Sponsor Direct Link)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={config.adsterraUrl1}
+                        onChange={(e) => setConfig({ ...config, adsterraUrl1: e.target.value })}
+                        placeholder="https://..."
+                        className="flex-1 text-xs py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleTestLink(config.adsterraUrl1, 'ad_hero')}
+                        className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-1 transition-all cursor-pointer ${
+                          testingLinkId === 'ad_hero'
+                            ? 'bg-emerald-500 text-white border-emerald-600'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 active:scale-95'
+                        }`}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>টেস্ট</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Tasks List with Edit Fields */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pt-1">
+                    <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-purple-600" />
+                      <span>সকল আর্নিং টাস্ক ও লিংক তালিকা ({editableTasks.length})</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingTask(!isAddingTask)}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{isAddingTask ? 'ফর্ম বন্ধ' : '+ নতুন টাস্ক যোগ'}</span>
+                    </button>
+                  </div>
+
+                  {/* Add New Custom Task Form */}
+                  {isAddingTask && (
+                    <form
+                      onSubmit={handleAddNewTask}
+                      className="p-3.5 bg-gradient-to-br from-purple-50/70 to-indigo-50/70 border border-purple-200 rounded-2xl space-y-3 animate-in fade-in"
+                    >
+                      <div className="flex items-center justify-between border-b border-purple-200/60 pb-2">
+                        <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                          <Plus className="w-3.5 h-3.5 text-purple-600" />
+                          <span>নতুন আর্নিং টাস্ক লিংক তৈরি করুন</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingTask(false)}
+                          className="text-slate-400 hover:text-slate-600 p-0.5"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                            বাংলা শিরোনাম *
+                          </label>
+                          <input
+                            type="text"
+                            value={newTaskTitleBn}
+                            onChange={(e) => setNewTaskTitleBn(e.target.value)}
+                            placeholder="যেমন: টেলিগ্রাম এয়ারড্রপ চ্যানেলে যোগ দিন"
+                            className="w-full text-xs py-2 px-3 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                            English Title
+                          </label>
+                          <input
+                            type="text"
+                            value={newTaskTitle}
+                            onChange={(e) => setNewTaskTitle(e.target.value)}
+                            placeholder="e.g. Join Partner Telegram"
+                            className="w-full text-xs py-2 px-3 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                          টাস্ক লিংক (URL) *
+                        </label>
+                        <input
+                          type="url"
+                          value={newTaskLink}
+                          onChange={(e) => setNewTaskLink(e.target.value)}
+                          placeholder="https://t.me/... বা https://your-website.com"
+                          className="w-full text-xs py-2 px-3 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                            রিওয়ার্ড (টাকা)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={newTaskReward}
+                            onChange={(e) => setNewTaskReward(e.target.value)}
+                            className="w-full text-xs py-2 px-3 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                            ভিজিট সময় (সেকেন্ড)
+                          </label>
+                          <input
+                            type="number"
+                            value={newTaskDuration}
+                            onChange={(e) => setNewTaskDuration(e.target.value)}
+                            className="w-full text-xs py-2 px-3 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 mb-1 block">
+                            টাস্ক টাইপ
+                          </label>
+                          <select
+                            value={newTaskIconType}
+                            onChange={(e) => setNewTaskIconType(e.target.value as any)}
+                            className="w-full text-xs py-2 px-2 bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          >
+                            <option value="telegram">Telegram</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="web">Web Visit</option>
+                            <option value="quiz">Quiz</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>টাস্কটি তালিকায় যুক্ত করুন</span>
+                      </button>
+                    </form>
+                  )}
+
+                  {/* Task Cards */}
+                  <div className="space-y-2.5">
+                    {editableTasks.map((task) => {
+                      const isBuiltinNoLink = !task.link && (task.iconType === 'checkin' || task.iconType === 'quiz');
+
+                      return (
+                        <div
+                          key={task.id}
+                          className="p-3 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-2.5 transition-all hover:border-purple-200"
+                        >
+                          {/* Task Header Row */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                  task.iconType === 'telegram'
+                                    ? 'bg-sky-50 text-sky-600 border border-sky-200'
+                                    : task.iconType === 'youtube'
+                                    ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                    : task.iconType === 'facebook'
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                    : task.iconType === 'web'
+                                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                    : task.iconType === 'quiz'
+                                    ? 'bg-purple-50 text-purple-600 border border-purple-200'
+                                    : 'bg-amber-50 text-amber-600 border border-amber-200'
+                                }`}
+                              >
+                                {task.iconType === 'telegram' ? (
+                                  <Send className="w-3.5 h-3.5" />
+                                ) : task.iconType === 'youtube' ? (
+                                  <Play className="w-3.5 h-3.5 fill-rose-600" />
+                                ) : task.iconType === 'facebook' ? (
+                                  <Globe className="w-3.5 h-3.5" />
+                                ) : task.iconType === 'web' ? (
+                                  <Globe className="w-3.5 h-3.5" />
+                                ) : task.iconType === 'quiz' ? (
+                                  <HelpCircle className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Award className="w-3.5 h-3.5" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <input
+                                  type="text"
+                                  value={task.titleBn || task.title}
+                                  onChange={(e) => handleUpdateTaskTitleBn(task.id, e.target.value)}
+                                  className="w-full text-xs font-bold text-slate-800 bg-transparent hover:bg-slate-50 focus:bg-white px-1.5 py-0.5 rounded-lg border border-transparent focus:border-purple-300 focus:outline-none transition-all"
+                                  title="ক্লিক করে শিরোনাম এডিট করতে পারেন"
+                                />
+                                <span className="text-[9px] text-slate-400 px-1 font-mono">
+                                  #{task.id}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md border border-slate-200">
+                                {task.category === 'visit' ? 'ওয়েব ভিজিট' : 'সোশ্যাল / স্পেশাল'}
+                              </span>
+                              {task.id.startsWith('task_custom_') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTask(task.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="টাস্ক মুছে ফেলুন"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Link Input Row (For tasks that have external URLs) */}
+                          {!isBuiltinNoLink ? (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
+                                টাস্ক লিংক (ইউজার এই লিংকে যাবে):
+                              </label>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="url"
+                                  value={task.link || ''}
+                                  onChange={(e) => handleUpdateTaskLink(task.id, e.target.value)}
+                                  placeholder="https://..."
+                                  className="flex-1 text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono text-slate-700"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestLink(task.link, task.id)}
+                                  className={`px-2.5 py-1.5 text-[11px] font-bold rounded-xl border flex items-center gap-1 transition-all cursor-pointer ${
+                                    testingLinkId === task.id
+                                      ? 'bg-purple-600 text-white border-purple-700'
+                                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 active:scale-95'
+                                  }`}
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  <span>টেস্ট</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-slate-50 rounded-xl text-[10px] text-slate-500 font-medium">
+                              {task.iconType === 'checkin'
+                                ? 'ℹ️ দৈনিক চেক-ইন বোনাস: এটি কোনো বাহ্যিক লিংক নয়, অ্যাপের ভেতরেই এক-ক্লিকে ক্লেইম হয়।'
+                                : 'ℹ️ ইন্টারঅ্যাক্টিভ কুইজ: অ্যাপের ভেতরে কুইজ প্রশ্ন সমাধান করে বোনাস অর্জন করতে হয়।'}
+                            </div>
+                          )}
+
+                          {/* Reward & Duration Row */}
+                          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-slate-600">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-400">রিওয়ার্ড:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] font-bold text-emerald-600">৳</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={task.reward}
+                                  onChange={(e) =>
+                                    handleUpdateTaskReward(task.id, parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-16 text-xs font-bold py-1 px-1.5 bg-slate-50 border border-slate-200 rounded-lg text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-400">অপেক্ষা:</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={task.duration ?? 10}
+                                  onChange={(e) =>
+                                    handleUpdateTaskDuration(task.id, parseInt(e.target.value) || 0)
+                                  }
+                                  className="w-14 text-xs font-bold py-1 px-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                />
+                                <span className="text-[10px] text-slate-500">সেকেন্ড</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* SAVE & RESET BUTTONS */}
+                <div className="pt-3 pb-2 space-y-2 sticky bottom-0 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pt-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEarnLinks()}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/25 active:scale-98 transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>সব লিংক ও টাস্ক সংরক্ষণ করুন (Save All Links)</span>
+                  </button>
+
+                  <div className="flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={handleResetDefaultTasks}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>ডিফল্ট লিংকগুলোতে ফিরে যান (Reset Default Links)</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : adminTab === 'ads' ? (
@@ -1262,7 +1849,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             videoUrl: trimmedUrl,
                             watched: false,
                             category: newVideoCategory,
-                            views: '0'
+                            views: '0',
+                            viewCount: 0,
                           });
                           setNewVideoTitle('');
                           setNewVideoDesc('');

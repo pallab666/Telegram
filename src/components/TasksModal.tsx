@@ -1,10 +1,9 @@
-import React, { useState } from "react";
-import { motion } from "motion/react";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Check,
   Globe,
-  Link2,
   Send,
   ChevronDown,
   MoreVertical,
@@ -13,9 +12,24 @@ import {
   Briefcase,
   Clock,
   Zap,
+  Sparkles,
+  Award,
+  AlertCircle,
+  HelpCircle,
+  RotateCcw,
+  CheckCircle2,
+  ExternalLink,
+  Layers,
 } from "lucide-react";
-import { EarnTask } from "../types";
-import { triggerHaptic } from "../utils/telegram";
+import { EarnTask, UserData } from "../types";
+import { triggerHaptic, openAdLink } from "../utils/telegram";
+import { triggerSmartAd } from "../utils/adManager";
+import { AppPreferences } from "../utils/preferences";
+import {
+  DailyCheckInCard,
+  CHECKIN_COOLDOWN_MS,
+  CHECKIN_STORAGE_KEY,
+} from "./DailyCheckInCard";
 import confetti from "canvas-confetti";
 
 interface TasksModalProps {
@@ -27,9 +41,74 @@ interface TasksModalProps {
   dailyCheckedIn: boolean;
   onlineCount?: number;
   userAvatar?: string;
+  user?: UserData;
   onOpenSettings?: () => void;
   language?: 'bn' | 'en';
+  preferences?: AppPreferences;
+  onClaimDailyCheckIn?: (reward: number, streak: number, timestamp: number) => void;
 }
+
+const MAX_DAILY_ADS = 15;
+const AD_REWARD_AMOUNT = 1.50;
+const AD_COOLDOWN_SECONDS = 20;
+const AD_WATCH_DURATION = 10;
+
+interface QuizQuestion {
+  id: string;
+  questionBn: string;
+  questionEn: string;
+  options: string[];
+  correctIndex: number;
+}
+
+const QUIZ_QUESTIONS: Record<string, QuizQuestion[]> = {
+  task_math_quiz: [
+    {
+      id: "mq_1",
+      questionBn: "সহজ হিসাব: ৮ × ৭ = কত?",
+      questionEn: "Simple math: 8 × 7 = ?",
+      options: ["৫৪", "৫৬", "৪৮", "৬২"],
+      correctIndex: 1,
+    },
+    {
+      id: "mq_2",
+      questionBn: "হিসাব করুন: ২৫ + ৩৭ = কত?",
+      questionEn: "Calculate: 25 + 37 = ?",
+      options: ["৫২", "৬০", "৬২", "৬৪"],
+      correctIndex: 2,
+    },
+    {
+      id: "mq_3",
+      questionBn: "সহজ সমাধান: ৯০ ÷ ৩ = কত?",
+      questionEn: "Solve: 90 ÷ 3 = ?",
+      options: ["২০", "২৫", "৩০", "৩৫"],
+      correctIndex: 2,
+    },
+  ],
+  task_gk_quiz: [
+    {
+      id: "gk_1",
+      questionBn: "বাংলাদেশের জাতীয় খেলা কোনটি?",
+      questionEn: "What is the national game of Bangladesh?",
+      options: ["ক্রিকেট", "ফুটবল", "হা-ডু-ডু (কাবাডি)", "হকি"],
+      correctIndex: 2,
+    },
+    {
+      id: "gk_2",
+      questionBn: "বাংলাদেশের জাতীয় কবির নাম কী?",
+      questionEn: "Who is the national poet of Bangladesh?",
+      options: ["রবীন্দ্রনাথ ঠাকুর", "কাজী নজরুল ইসলাম", "জীবনানন্দ দাশ", "জসীমউদ্দীন"],
+      correctIndex: 1,
+    },
+    {
+      id: "gk_3",
+      questionBn: "স্মার্ট আর্নিং অ্যাপে প্রতি রেফারে কত বোনাস পাওয়া যায়?",
+      questionEn: "How much referral bonus is given in this app?",
+      options: ["৳৫", "৳১০", "৳১৫", "৳২০"],
+      correctIndex: 2,
+    },
+  ],
+};
 
 export const TasksModal: React.FC<TasksModalProps> = ({
   isOpen,
@@ -40,16 +119,243 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   dailyCheckedIn,
   onlineCount = 1,
   userAvatar,
+  user,
   onOpenSettings,
   language = 'bn',
+  preferences,
+  onClaimDailyCheckIn,
 }) => {
-  const [activeTab, setActiveTab] = useState<"visit" | "special">("visit");
+  const [activeTab, setActiveTab] = useState<"all" | "visit" | "special">("all");
+
+  // Daily ad state management
+  const todayKey = `smart_earning_daily_ads_${new Date().toISOString().slice(0, 10)}`;
+  const [adsWatchedCount, setAdsWatchedCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(todayKey);
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [adCooldown, setAdCooldown] = useState<number>(0);
+  const [isWatchingAd, setIsWatchingAd] = useState(false);
+  const [adProgressTimer, setAdProgressTimer] = useState<number>(AD_WATCH_DURATION);
+  const [canClaimAdReward, setCanClaimAdReward] = useState(false);
+
+  // Task verification countdowns: taskId -> remaining seconds
+  const [verifyingTasks, setVerifyingTasks] = useState<Record<string, { remaining: number; canClaim: boolean }>>({});
+
+  // Active Quiz Modal state
+  const [activeQuizTask, setActiveQuizTask] = useState<EarnTask | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [quizResultState, setQuizResultState] = useState<"idle" | "correct" | "wrong">("idle");
+
+  // Toast feedback inside modal
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+
+  const showInnerToast = (msg: string) => {
+    setToastNotice(msg);
+    setTimeout(() => setToastNotice(null), 3000);
+  };
+
+  // Cooldown countdown effect
+  useEffect(() => {
+    if (adCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setAdCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [adCooldown]);
+
+  // Active Ad watching timer effect
+  useEffect(() => {
+    if (!isWatchingAd) return;
+    if (adProgressTimer <= 0) {
+      setCanClaimAdReward(true);
+      return;
+    }
+    const interval = setInterval(() => {
+      setAdProgressTimer((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isWatchingAd, adProgressTimer]);
+
+  // Task verification timer countdown
+  useEffect(() => {
+    const hasActiveVerifications = Object.keys(verifyingTasks).some(
+      (id) => !verifyingTasks[id].canClaim && verifyingTasks[id].remaining > 0
+    );
+    if (!hasActiveVerifications) return;
+
+    const interval = setInterval(() => {
+      setVerifyingTasks((prev) => {
+        const next = { ...prev };
+        let updated = false;
+        Object.keys(next).forEach((id) => {
+          if (!next[id].canClaim && next[id].remaining > 0) {
+            const nextRemaining = next[id].remaining - 1;
+            next[id] = {
+              remaining: nextRemaining,
+              canClaim: nextRemaining === 0,
+            };
+            updated = true;
+          }
+        });
+        return updated ? next : prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [verifyingTasks]);
 
   if (!isOpen) return null;
 
-  const handleTaskClick = (task: EarnTask) => {
+  // Handle Watch Ad Click
+  const handleStartWatchAd = () => {
+    if (adsWatchedCount >= MAX_DAILY_ADS) {
+      triggerHaptic("warning");
+      showInnerToast(
+        language === "bn"
+          ? "আজকের বিজ্ঞাপনের কোটা পূর্ণ! আগামীকাল আবার দেখুন।"
+          : "Daily ad limit reached! Please return tomorrow."
+      );
+      return;
+    }
+
+    if (adCooldown > 0) {
+      triggerHaptic("warning");
+      showInnerToast(
+        language === "bn"
+          ? `অনুগ্রহ করে ${adCooldown} সেকেন্ড অপেক্ষা করুন!`
+          : `Please wait ${adCooldown} seconds!`
+      );
+      return;
+    }
+
+    triggerHaptic("medium");
+
+    // Open real ad network direct link
+    triggerSmartAd("video");
+
+    // Start in-app interactive ad progress modal
+    setIsWatchingAd(true);
+    setAdProgressTimer(AD_WATCH_DURATION);
+    setCanClaimAdReward(false);
+  };
+
+  // Claim Ad reward
+  const handleClaimAdReward = () => {
+    triggerHaptic("success");
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.5 },
+    });
+
+    const newCount = adsWatchedCount + 1;
+    setAdsWatchedCount(newCount);
+    try {
+      localStorage.setItem(todayKey, newCount.toString());
+    } catch {}
+
+    onCompleteTask(`watch_ad_${Date.now()}`, AD_REWARD_AMOUNT);
+
+    setIsWatchingAd(false);
+    setCanClaimAdReward(false);
+    setAdCooldown(AD_COOLDOWN_SECONDS);
+
+    showInnerToast(
+      language === "bn"
+        ? `🎉 বিজ্ঞাপন সম্পন্ন! +৳${AD_REWARD_AMOUNT.toFixed(2)} ব্যালেন্সে যুক্ত হয়েছে!`
+        : `🎉 Ad completed! +৳${AD_REWARD_AMOUNT.toFixed(2)} added to balance!`
+    );
+  };
+
+  // Handle Task Action (Visit, Social, Checkin, Quiz)
+  const handleTaskAction = (task: EarnTask) => {
     if (task.completed) return;
 
+    // Checkin Task
+    if (task.id === "task_checkin" || task.iconType === "checkin") {
+      let storedTimestamp = user?.lastCheckInTimestamp;
+      if (!storedTimestamp) {
+        const stored = localStorage.getItem(CHECKIN_STORAGE_KEY);
+        if (stored) storedTimestamp = parseInt(stored, 10);
+      }
+      const isCooldown = storedTimestamp && Date.now() - storedTimestamp < CHECKIN_COOLDOWN_MS;
+      if (isCooldown) {
+        showInnerToast(
+          language === "bn"
+            ? "⏰ আজকের চেক-ইন সম্পন্ন হয়েছে! পরবর্তী ২৪ ঘণ্টা পর আবার ক্লেইম করুন।"
+            : "⏰ Daily check-in already claimed! Available every 24 hours."
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const currentStreak = user?.checkInStreak || 0;
+      let newStreak = 1;
+      if (storedTimestamp && now - storedTimestamp <= 48 * 60 * 60 * 1000) {
+        newStreak = currentStreak + 1;
+      }
+      localStorage.setItem(CHECKIN_STORAGE_KEY, now.toString());
+
+      if (onClaimDailyCheckIn) {
+        onClaimDailyCheckIn(task.reward, newStreak, now);
+      } else {
+        onCompleteTask(task.id, task.reward);
+      }
+      showInnerToast(
+        language === "bn"
+          ? `🎉 দৈনিক বোনাস +৳${task.reward.toFixed(2)} সংগ্রহ করা হয়েছে!`
+          : `🎉 Daily bonus +৳${task.reward.toFixed(2)} claimed!`
+      );
+      return;
+    }
+
+    // Quiz Task
+    if (task.iconType === "quiz") {
+      triggerHaptic("medium");
+      const qList = QUIZ_QUESTIONS[task.id] || QUIZ_QUESTIONS.task_math_quiz;
+      const randomQ = qList[Math.floor(Math.random() * qList.length)];
+      setCurrentQuestion(randomQ);
+      setSelectedOption(null);
+      setQuizResultState("idle");
+      setActiveQuizTask(task);
+      return;
+    }
+
+    // Task with link (Telegram, YouTube, Facebook, Sponsor Web)
+    const verification = verifyingTasks[task.id];
+
+    // If already verified and ready to claim
+    if (verification?.canClaim) {
+      triggerHaptic("success");
+      confetti({
+        particleCount: 40,
+        spread: 50,
+        origin: { y: 0.6 },
+      });
+      onCompleteTask(task.id, task.reward);
+
+      // Clean verification state
+      setVerifyingTasks((prev) => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
+      });
+
+      showInnerToast(
+        language === "bn"
+          ? `✅ টাস্ক সম্পন্ন! +৳${task.reward.toFixed(2)} পেয়ে গেছেন!`
+          : `✅ Task completed! +৳${task.reward.toFixed(2)} credited!`
+      );
+      return;
+    }
+
+    // Otherwise, start task verification
     triggerHaptic("medium");
     if (task.link) {
       if (window.Telegram?.WebApp?.openLink) {
@@ -59,31 +365,71 @@ export const TasksModal: React.FC<TasksModalProps> = ({
       }
     }
 
-    // Simulate ad watch or task completion
-    setTimeout(() => {
-      onCompleteTask(task.id, task.reward);
-    }, 1500);
+    const duration = task.duration || 10;
+    setVerifyingTasks((prev) => ({
+      ...prev,
+      [task.id]: {
+        remaining: duration,
+        canClaim: false,
+      },
+    }));
+
+    showInnerToast(
+      language === "bn"
+        ? `লিংক খোলা হয়েছে। রিওয়ার্ড পেতে ${duration} সেকেন্ড অপেক্ষা করুন...`
+        : `Link opened. Wait ${duration}s to claim your reward...`
+    );
   };
 
-  const handleWatchAd = () => {
+  // Submit Quiz Answer
+  const handleAnswerQuiz = (index: number) => {
+    if (!currentQuestion || !activeQuizTask) return;
+    setSelectedOption(index);
+
+    if (index === currentQuestion.correctIndex) {
+      triggerHaptic("success");
+      setQuizResultState("correct");
+    } else {
+      triggerHaptic("error");
+      setQuizResultState("wrong");
+    }
+  };
+
+  // Claim Quiz Reward
+  const handleClaimQuizReward = () => {
+    if (!activeQuizTask) return;
     triggerHaptic("success");
     confetti({
-      particleCount: 60,
-      spread: 50,
-      origin: { y: 0.6 },
-      zIndex: 9999,
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.5 },
     });
-    // Simulate watching an ad
-    setTimeout(() => {
-      onCompleteTask("watch_ad_bonus", 10.0);
-    }, 1000);
+
+    onCompleteTask(activeQuizTask.id, activeQuizTask.reward);
+    setActiveQuizTask(null);
+    setCurrentQuestion(null);
+
+    showInnerToast(
+      language === "bn"
+        ? `🎉 কুইজ সঠিক হয়েছে! +৳${activeQuizTask.reward.toFixed(2)} যোগ হয়েছে!`
+        : `🎉 Quiz correct! +৳${activeQuizTask.reward.toFixed(2)} added!`
+    );
   };
+
+  // Filter tasks based on active tab
+  const filteredTasks = tasks.filter((task) => {
+    if (activeTab === "visit") return task.category === "visit" || task.iconType === "web";
+    if (activeTab === "special") return task.category === "special" || task.category === "Social" || task.iconType !== "web";
+    return true;
+  });
+
+  const completedCount = tasks.filter((t) => t.completed).length;
 
   const renderIcon = (type: string, isCompleted: boolean) => {
     if (isCompleted) {
       return (
-        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-400">
-          <Check size={18} />
+        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 border border-emerald-200">
+          <Check size={20} strokeWidth={2.5} />
         </div>
       );
     }
@@ -91,53 +437,50 @@ export const TasksModal: React.FC<TasksModalProps> = ({
     switch (type) {
       case "telegram":
         return (
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
+          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 border border-blue-200">
             <Send size={18} />
           </div>
         );
       case "youtube":
         return (
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 border border-red-200">
             <Play size={18} fill="currentColor" />
+          </div>
+        );
+      case "facebook":
+        return (
+          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 border border-indigo-200">
+            <Globe size={18} />
           </div>
         );
       case "checkin":
         return (
-          <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500">
-            <Globe size={18} />
+          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 border border-amber-200">
+            <Award size={18} />
+          </div>
+        );
+      case "quiz":
+        return (
+          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 border border-purple-200">
+            <HelpCircle size={18} />
           </div>
         );
       default:
         return (
-          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-500">
-            <Link2 size={18} />
+          <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-200">
+            <Globe size={18} />
           </div>
         );
     }
   };
 
-  // Generate some extra visual tasks if the list is short to match the screenshot vibe
-  const displayTasks = [...tasks];
-  if (displayTasks.length < 10) {
-    for (let i = displayTasks.length; i < 12; i++) {
-      displayTasks.push({
-        id: `mock_task_${i}`,
-        title: `Visit Job ${i + 1}`,
-        titleBn: `ভিজিট করুন ${i + 1}`,
-        reward: 30.0,
-        iconType: i % 4 === 0 ? "telegram" : "quiz",
-        category: "visit",
-        completed: false,
-      });
-    }
-  }
-
   return (
     <motion.div
       initial={{ opacity: 0, y: "100%" }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      className="fixed inset-0 z-30 flex flex-col bg-[#eef2ff] sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden"
+      className="fixed inset-0 z-30 flex flex-col bg-[#f5f3ff] sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden"
     >
       {/* Top Status Bar (Purple) */}
       <div className="bg-[#a855f7] px-4 py-2.5 flex items-center justify-between text-white shrink-0 shadow-sm relative z-20">
@@ -146,7 +489,7 @@ export const TasksModal: React.FC<TasksModalProps> = ({
             triggerHaptic("light");
             onClose();
           }}
-          className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors"
+          className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors cursor-pointer"
         >
           <X size={24} />
         </button>
@@ -161,13 +504,24 @@ export const TasksModal: React.FC<TasksModalProps> = ({
 
       {/* Profile Bar (Blue) */}
       <div className="bg-gradient-to-b from-[#3b82f6] to-[#60a5fa] px-4 py-3 flex items-center justify-between text-white rounded-b-3xl shrink-0 shadow-md relative z-10">
-        <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-white/30 bg-blue-300 shadow-inner">
-          <img
-            src={userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"}
-            alt="avatar"
-            className="w-full h-full object-cover"
-          />
+        <div className="flex items-center gap-2.5">
+          <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-white/40 bg-blue-300 shadow-inner">
+            <img
+              src={userAvatar || user?.avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"}
+              alt="avatar"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div>
+            <p className="text-xs font-black leading-tight text-white line-clamp-1 max-w-[120px]">
+              {user?.name || (language === "bn" ? "ব্যবহারকারী" : "User")}
+            </p>
+            <p className="text-[10px] text-blue-100 font-bold">
+              {language === "bn" ? "ব্যালেন্স" : "Balance"}: ৳{(user?.balance || 0).toFixed(2)}
+            </p>
+          </div>
         </div>
+
         <div className="bg-white/20 backdrop-blur-md rounded-full px-4 py-1.5 flex items-center gap-2 border border-white/10 shadow-inner">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
@@ -177,180 +531,521 @@ export const TasksModal: React.FC<TasksModalProps> = ({
             {onlineCount} {language === 'bn' ? 'অনলাইন' : 'ONLINE'}
           </span>
         </div>
+
         <button
           onClick={onOpenSettings}
-          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner"
+          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner cursor-pointer"
         >
           <Settings size={20} className="text-yellow-300" />
         </button>
       </div>
 
+      {/* Floating Toast Notification */}
+      <AnimatePresence>
+        {toastNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-28 left-4 right-4 z-40 bg-slate-900/95 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-2.5 text-xs font-bold"
+          >
+            <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
+            <span className="flex-1">{toastNotice}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto w-full pb-20">
-        <div className="px-4 py-6">
-          {/* HERO CARD - Watch Ads & Earn */}
-          <div className="bg-gradient-to-br from-[#8b5cf6] via-[#c026d3] to-[#d946ef] rounded-[2rem] p-6 shadow-xl shadow-purple-500/20 text-center relative overflow-hidden mb-6 border border-purple-400/30">
-            {/* Background floating money elements (implied) */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-fuchsia-500/20 rounded-full blur-2xl -ml-10 -mb-10" />
+      <div className="flex-1 overflow-y-auto w-full pb-28 px-4 pt-4">
+        {/* 1. DAILY CHECK-IN REWARD CARD (24h Cooldown + 7-Day Streak) */}
+        <DailyCheckInCard
+          lastCheckInTimestamp={user?.lastCheckInTimestamp}
+          checkInStreak={user?.checkInStreak}
+          onClaim={(reward, newStreak, timestamp) => {
+            if (onClaimDailyCheckIn) {
+              onClaimDailyCheckIn(reward, newStreak, timestamp);
+            } else {
+              onCompleteTask("task_checkin", reward);
+            }
+          }}
+          preferences={preferences}
+        />
 
-            <div className="relative z-10 flex flex-col items-center">
-              {/* Giant Coin Icon */}
-              <div className="w-24 h-24 rounded-full border-4 border-yellow-200/50 bg-gradient-to-b from-yellow-100 to-yellow-300 flex items-center justify-center shadow-[0_0_30px_rgba(253,224,71,0.5)] mb-4 relative">
-                <div className="w-16 h-16 bg-[#854d0e] rounded-full flex items-center justify-center">
-                  <span className="text-4xl font-black text-yellow-400">$</span>
-                </div>
-                <div className="absolute -bottom-2 -right-2 bg-[#4ade80] text-white text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-purple-600 shadow-sm">
-                  $$$
-                </div>
+        {/* HERO CARD - Watch Ads & Earn */}
+        <div className="bg-gradient-to-br from-[#8b5cf6] via-[#a855f7] to-[#d946ef] rounded-[2rem] p-5 shadow-xl shadow-purple-500/20 text-center relative overflow-hidden mb-4 border border-purple-400/30">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-fuchsia-500/20 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col items-center">
+            {/* Coin Icon Badge */}
+            <div className="w-20 h-20 rounded-full border-4 border-yellow-200/50 bg-gradient-to-b from-yellow-100 to-yellow-300 flex items-center justify-center shadow-[0_0_25px_rgba(253,224,71,0.5)] mb-3 relative">
+              <div className="w-13 h-13 bg-[#854d0e] rounded-full flex items-center justify-center shadow-inner">
+                <span className="text-3xl font-black text-yellow-400">৳</span>
               </div>
-
-              <h2 className="text-[26px] font-black text-white mb-4 drop-shadow-md tracking-tight">
-                Watch Ads & Earn
-              </h2>
-
-              {/* Dark Info Box */}
-              <div className="bg-black/20 backdrop-blur-md rounded-2xl p-3 flex flex-col items-center border border-white/10 shadow-inner w-[85%] mb-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-white font-bold text-xs">
-                    Per Ad Reward:
-                  </span>
-                  <span className="bg-[#4ade80] text-emerald-950 px-2 py-0.5 rounded-full text-xs font-black">
-                    ৳10.0000
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-yellow-700 rounded-full"></div>
-                  </div>
-                  <span className="text-yellow-400 font-bold text-[10px] tracking-widest uppercase">
-                    Daily Limit: <span className="text-white">0 / 300</span>
-                  </span>
-                </div>
+              <div className="absolute -bottom-1 -right-1 bg-[#4ade80] text-emerald-950 text-[9px] font-black px-1.5 py-0.5 rounded-full border-2 border-purple-600 shadow-sm">
+                BONUS
               </div>
+            </div>
 
-              {/* Action Button */}
-              <button
-                onClick={handleWatchAd}
-                className="w-full bg-gradient-to-b from-[#fef08a] via-[#fde047] to-[#eab308] shadow-[0_6px_0_#ca8a04] rounded-2xl py-3.5 flex items-center justify-center gap-2 transition-all active:shadow-[0_0px_0_#ca8a04] active:translate-y-1.5"
-              >
-                <div className="w-6 h-6 rounded-full bg-purple-900 flex items-center justify-center pl-0.5">
-                  <Play
-                    className="text-yellow-400"
-                    size={14}
-                    fill="currentColor"
-                  />
-                </div>
-                <span className="text-purple-900 font-black text-lg tracking-wide uppercase">
-                  Watch Ad Now
+            <h2 className="text-[22px] font-black text-white mb-1 drop-shadow-md tracking-tight">
+              {language === "bn" ? "বিজ্ঞাপন দেখুন ও আয় করুন" : "Watch Ads & Earn"}
+            </h2>
+            <p className="text-[11px] font-bold text-purple-100 mb-3.5">
+              {language === "bn" ? "প্রতি বিজ্ঞাপনে নগদ টাকা ইনস্ট্যান্ট যোগ হয়" : "Instant cash credited per completed ad"}
+            </p>
+
+            {/* Info Box */}
+            <div className="bg-black/25 backdrop-blur-md rounded-2xl p-3 flex justify-between items-center border border-white/10 shadow-inner w-full mb-4">
+              <div className="flex flex-col text-left">
+                <span className="text-purple-200 font-bold text-[10px] uppercase tracking-wider">
+                  {language === "bn" ? "প্রতি বিজ্ঞাপনে আয়" : "Per Ad Reward"}
                 </span>
-              </button>
+                <span className="text-yellow-300 font-black text-base">
+                  +৳{AD_REWARD_AMOUNT.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="h-7 w-[1px] bg-white/20" />
+
+              <div className="flex flex-col text-right">
+                <span className="text-purple-200 font-bold text-[10px] uppercase tracking-wider">
+                  {language === "bn" ? "আজকের লিমিট" : "Daily Limit"}
+                </span>
+                <span className="text-white font-black text-base font-mono">
+                  {adsWatchedCount} / {MAX_DAILY_ADS}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <button
+              onClick={handleStartWatchAd}
+              disabled={adCooldown > 0 || adsWatchedCount >= MAX_DAILY_ADS}
+              className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
+                adsWatchedCount >= MAX_DAILY_ADS
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                  : adCooldown > 0
+                  ? "bg-yellow-200/90 text-yellow-900 border border-yellow-300 cursor-not-allowed font-black"
+                  : "bg-gradient-to-b from-[#fef08a] via-[#fde047] to-[#eab308] shadow-[0_5px_0_#ca8a04] active:shadow-[0_0px_0_#ca8a04] active:translate-y-1 text-purple-950 font-black"
+              }`}
+            >
+              {adsWatchedCount >= MAX_DAILY_ADS ? (
+                <div className="flex items-center gap-1.5 font-bold text-sm">
+                  <CheckCircle2 size={18} />
+                  <span>{language === "bn" ? "আজকের লিমিট শেষ" : "Daily Limit Reached"}</span>
+                </div>
+              ) : adCooldown > 0 ? (
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Clock size={16} className="animate-spin" />
+                  <span>
+                    {language === "bn"
+                      ? `পরবর্তী বিজ্ঞাপন: ${adCooldown} সে.`
+                      : `Next ad in: ${adCooldown}s`}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="w-6 h-6 rounded-full bg-purple-900 flex items-center justify-center pl-0.5">
+                    <Play className="text-yellow-400" size={13} fill="currentColor" />
+                  </div>
+                  <span className="text-base tracking-wide uppercase">
+                    {language === "bn" ? "বিজ্ঞাপন দেখুন" : "Watch Ad Now"}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* STATS PROGRESS BAR */}
+        <div className="bg-white rounded-2xl p-3.5 mb-4 shadow-xs border border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+              <Layers size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black text-slate-800">
+                {language === "bn" ? "টাস্ক সম্পন্ন প্রগ্রেস" : "Task Completion Progress"}
+              </p>
+              <p className="text-[11px] text-slate-500 font-bold">
+                {completedCount} / {tasks.length} {language === "bn" ? "টাস্ক সম্পন্ন" : "tasks completed"}
+              </p>
             </div>
           </div>
-
-          {/* TWO TABS */}
-          <div className="flex gap-3 mb-6">
-            <button
-              onClick={() => setActiveTab("visit")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm shadow-md transition-all ${
-                activeTab === "visit"
-                  ? "bg-gradient-to-b from-[#3b82f6] to-[#1d4ed8] text-white border border-blue-400 shadow-blue-500/30"
-                  : "bg-white text-slate-500 border border-slate-200"
-              }`}
-            >
-              <Globe size={18} /> Visit Jobs
-            </button>
-            <button
-              onClick={() => setActiveTab("special")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm shadow-md transition-all ${
-                activeTab === "special"
-                  ? "bg-gradient-to-b from-[#3b82f6] to-[#1d4ed8] text-white border border-blue-400 shadow-blue-500/30"
-                  : "bg-white text-slate-500 border border-slate-200"
-              }`}
-            >
-              <Briefcase size={18} /> Special Jobs
-            </button>
+          <div className="text-right">
+            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+              {Math.round((completedCount / (tasks.length || 1)) * 100)}%
+            </span>
           </div>
+        </div>
 
-          {/* TASKS LIST */}
-          <div className="space-y-3.5">
-            {displayTasks.map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{
-                  delay: index * 0.05,
-                  type: "spring",
-                  bounce: 0.4,
-                }}
-                className={`relative bg-gradient-to-r from-[#fefce8] to-[#fffbeb] rounded-[1.25rem] p-3.5 flex items-center justify-between border-2 transition-all ${
-                  task.completed
-                    ? "opacity-60 border-slate-200 grayscale-[0.5]"
-                    : "border-[#fde047] shadow-sm hover:shadow-md"
-                }`}
-              >
-                {!task.completed && (
-                  <div className="absolute top-0 right-3 -translate-y-1/2 bg-[#ef4444] text-white px-1.5 py-0.5 rounded shadow-sm text-[8px] font-black uppercase tracking-wider">
-                    HOT
-                  </div>
-                )}
+        {/* THREE TABS */}
+        <div className="flex bg-white rounded-2xl p-1 mb-4 shadow-xs border border-slate-200">
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("all");
+            }}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer ${
+              activeTab === "all"
+                ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {language === "bn" ? "সকল টাস্ক" : "All Tasks"}
+          </button>
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("visit");
+            }}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+              activeTab === "visit"
+                ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Globe size={14} />
+            <span>{language === "bn" ? "ওয়েব ভিজিট" : "Visit Jobs"}</span>
+          </button>
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("special");
+            }}
+            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+              activeTab === "special"
+                ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Briefcase size={14} />
+            <span>{language === "bn" ? "স্পেশাল" : "Special Jobs"}</span>
+          </button>
+        </div>
 
-                <div className="flex items-center gap-3.5">
-                  {renderIcon(task.iconType, task.completed)}
+        {/* TASKS LIST */}
+        <div className="space-y-3">
+          {filteredTasks.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-300">
+              <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-500">
+                {language === "bn" ? "এই ক্যাটাগরিতে কোনো টাস্ক নেই" : "No tasks in this category"}
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map((task) => {
+              const isDone = task.completed;
+              const verification = verifyingTasks[task.id];
+              const isVerifying = verification && !verification.canClaim && verification.remaining > 0;
+              const isReadyToClaim = verification && verification.canClaim;
 
-                  <div className="flex flex-col">
-                    <span className="font-black text-slate-800 text-[15px] mb-0.5">
-                      {task.titleBn}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#10b981] font-black text-[13px]">
-                        +৳{task.reward.toFixed(2)}
-                      </span>
-                      <div className="flex items-center gap-0.5 text-slate-400">
-                        {task.iconType === "telegram" ? (
-                          <Zap size={10} className="text-blue-500" />
-                        ) : (
-                          <Clock size={10} />
+              return (
+                <motion.div
+                  key={task.id}
+                  layout
+                  className={`bg-white rounded-[1.3rem] p-3.5 flex items-center justify-between border transition-all ${
+                    isDone
+                      ? "opacity-60 border-slate-200 bg-slate-50/70"
+                      : isReadyToClaim
+                      ? "border-emerald-400 bg-emerald-50/40 shadow-sm ring-2 ring-emerald-400/30"
+                      : "border-slate-200 shadow-xs hover:border-purple-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {renderIcon(task.iconType, isDone)}
+
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-black text-slate-900 text-xs line-clamp-1 max-w-[150px]">
+                          {language === "bn" ? task.titleBn : task.title}
+                        </h4>
+                        {!isDone && (
+                          <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                            +৳{task.reward.toFixed(2)}
+                          </span>
                         )}
-                        <span className="text-[10px] font-bold">
-                          {task.iconType === "telegram"
-                            ? "Instant"
-                            : index === 0
-                              ? "150s"
-                              : "60s"}
-                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-1">
+                        {isDone ? (
+                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                            <Check size={12} /> {language === "bn" ? "সম্পন্ন" : "Done"}
+                          </span>
+                        ) : isVerifying ? (
+                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
+                            <Clock size={12} />
+                            {language === "bn"
+                              ? `যাচাই হচ্ছে: ${verification.remaining} সে.`
+                              : `Verifying: ${verification.remaining}s`}
+                          </span>
+                        ) : isReadyToClaim ? (
+                          <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                            <Sparkles size={12} />
+                            {language === "bn" ? "রিওয়ার্ড প্রস্তুত!" : "Reward Ready!"}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
+                            {task.iconType === "checkin" ? (
+                              <span>{language === "bn" ? "দৈনিক একবার" : "Once daily"}</span>
+                            ) : task.iconType === "quiz" ? (
+                              <span>{language === "bn" ? "সহজ কুইজ" : "Mini Quiz"}</span>
+                            ) : (
+                              <>
+                                <Clock size={10} />
+                                <span>{task.duration ? `${task.duration}s` : "Instant"}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={() => handleTaskClick(task)}
-                  disabled={task.completed}
-                  className={`px-4 py-2 rounded-full font-black text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-90 ${
-                    task.completed
-                      ? "bg-slate-200 text-slate-500 border-slate-300"
-                      : task.iconType === "telegram"
-                        ? "bg-blue-50 text-blue-600 border border-blue-200"
-                        : "bg-indigo-50 text-indigo-600 border border-indigo-200"
-                  }`}
-                >
-                  {task.completed ? (
-                    "Done"
-                  ) : task.iconType === "telegram" ? (
-                    <>+ Join</>
-                  ) : (
-                    <>
-                      Start <Play size={10} fill="currentColor" />
-                    </>
-                  )}
-                </button>
-              </motion.div>
-            ))}
-          </div>
+                  {/* Task Action Button */}
+                  <div>
+                    {isDone ? (
+                      <div className="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-400 text-xs font-bold border border-slate-200 flex items-center gap-1">
+                        <Check size={14} />
+                        <span>{language === "bn" ? "সম্পন্ন" : "Done"}</span>
+                      </div>
+                    ) : isVerifying ? (
+                      <button
+                        disabled
+                        className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-200 flex items-center gap-1 cursor-wait"
+                      >
+                        <Clock size={12} className="animate-spin" />
+                        <span>{verification.remaining}s</span>
+                      </button>
+                    ) : isReadyToClaim ? (
+                      <button
+                        onClick={() => handleTaskAction(task)}
+                        className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-sm flex items-center gap-1 active:scale-95 transition-transform cursor-pointer animate-bounce"
+                      >
+                        <Sparkles size={13} />
+                        <span>{language === "bn" ? "দাবি করুন" : "Claim"}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleTaskAction(task)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer ${
+                          task.iconType === "checkin"
+                            ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+                            : task.iconType === "quiz"
+                            ? "bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
+                            : task.iconType === "telegram"
+                            ? "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20"
+                        }`}
+                      >
+                        {task.iconType === "checkin" ? (
+                          <>
+                            <Award size={13} />
+                            <span>{language === "bn" ? "ক্লেম" : "Claim"}</span>
+                          </>
+                        ) : task.iconType === "quiz" ? (
+                          <>
+                            <HelpCircle size={13} />
+                            <span>{language === "bn" ? "কুইজ" : "Quiz"}</span>
+                          </>
+                        ) : task.iconType === "telegram" ? (
+                          <>
+                            <Send size={12} />
+                            <span>{language === "bn" ? "যুক্ত হোন" : "Join"}</span>
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink size={12} />
+                            <span>{language === "bn" ? "শুরু করুন" : "Start"}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
         </div>
       </div>
+
+      {/* AD WATCHING OVERLAY MODAL */}
+      <AnimatePresence>
+        {isWatchingAd && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-gradient-to-b from-slate-900 to-purple-950 text-white rounded-3xl p-6 w-full max-w-xs border border-purple-500/30 text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="w-16 h-16 rounded-full bg-purple-500/20 border border-purple-400/40 flex items-center justify-center mx-auto mb-4 relative">
+                <Play className="w-7 h-7 text-yellow-300 ml-1" fill="currentColor" />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400"></span>
+                </span>
+              </div>
+
+              <h3 className="text-lg font-black mb-1">
+                {canClaimAdReward
+                  ? language === "bn"
+                    ? "বিজ্ঞাপন সম্পন্ন!"
+                    : "Ad Finished!"
+                  : language === "bn"
+                  ? "বিজ্ঞাপন প্রদর্শিত হচ্ছে..."
+                  : "Ad is Playing..."}
+              </h3>
+              <p className="text-xs text-purple-200 mb-5">
+                {canClaimAdReward
+                  ? language === "bn"
+                    ? "আপনার রিওয়ার্ড গ্রহণের জন্য প্রস্তুত।"
+                    : "Your reward is ready to be claimed."
+                  : language === "bn"
+                  ? "পুরস্কার পেতে পুরো সময় অপেক্ষা করুন"
+                  : "Please wait to earn your reward"}
+              </p>
+
+              {/* Countdown or Claim Button */}
+              {!canClaimAdReward ? (
+                <div className="space-y-3">
+                  <div className="w-20 h-20 rounded-full border-4 border-purple-500/30 border-t-yellow-400 flex items-center justify-center mx-auto animate-spin">
+                    <span className="text-2xl font-black text-yellow-300 font-mono -rotate-45">
+                      {adProgressTimer}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-purple-300 font-bold">
+                    {adProgressTimer} {language === "bn" ? "সেকেন্ড বাকি" : "seconds remaining"}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleClaimAdReward}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black text-sm rounded-xl shadow-lg hover:from-emerald-300 hover:to-teal-400 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles size={16} />
+                  <span>
+                    {language === "bn"
+                      ? `+৳${AD_REWARD_AMOUNT.toFixed(2)} সংগ্রহ করুন`
+                      : `Claim +৳${AD_REWARD_AMOUNT.toFixed(2)}`}
+                  </span>
+                </button>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QUIZ MODAL */}
+      <AnimatePresence>
+        {activeQuizTask && currentQuestion && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl border border-slate-200 relative"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                    <HelpCircle size={18} />
+                  </div>
+                  <span className="text-xs font-black text-purple-900 uppercase tracking-wider">
+                    {language === "bn" ? "কুইজ চ্যালেঞ্জ" : "Quiz Challenge"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setActiveQuizTask(null);
+                    setCurrentQuestion(null);
+                  }}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-purple-50 rounded-2xl p-4 mb-4 border border-purple-100 text-center">
+                <p className="text-sm font-black text-slate-800">
+                  {language === "bn" ? currentQuestion.questionBn : currentQuestion.questionEn}
+                </p>
+                <span className="text-[10px] font-bold text-purple-600 mt-1 inline-block">
+                  {language === "bn"
+                    ? `সঠিক উত্তরে পাবেন +৳${activeQuizTask.reward.toFixed(2)}`
+                    : `Get +৳${activeQuizTask.reward.toFixed(2)} on correct answer`}
+                </span>
+              </div>
+
+              {/* Options */}
+              <div className="space-y-2 mb-4">
+                {currentQuestion.options.map((option, idx) => {
+                  const isSelected = selectedOption === idx;
+                  const isCorrect = idx === currentQuestion.correctIndex;
+
+                  let btnStyle = "bg-slate-50 border-slate-200 text-slate-700 hover:bg-purple-50 hover:border-purple-300";
+                  if (quizResultState !== "idle" && isSelected) {
+                    btnStyle = isCorrect
+                      ? "bg-emerald-500 border-emerald-600 text-white"
+                      : "bg-red-500 border-red-600 text-white";
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      disabled={quizResultState === "correct"}
+                      onClick={() => handleAnswerQuiz(idx)}
+                      className={`w-full py-2.5 px-4 rounded-xl border text-xs font-black flex items-center justify-between transition-all cursor-pointer ${btnStyle}`}
+                    >
+                      <span>{option}</span>
+                      {quizResultState !== "idle" && isSelected && (
+                        <span>{isCorrect ? "✓" : "✕"}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Feedback State */}
+              {quizResultState === "correct" && (
+                <div className="space-y-2">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center text-emerald-800 text-xs font-black flex items-center justify-center gap-1.5">
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                    <span>{language === "bn" ? "সঠিক উত্তর! অভিনন্দন!" : "Correct Answer! Congratulations!"}</span>
+                  </div>
+                  <button
+                    onClick={handleClaimQuizReward}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-md transition-transform active:scale-95 cursor-pointer"
+                  >
+                    {language === "bn"
+                      ? `+৳${activeQuizTask.reward.toFixed(2)} জমা নিন`
+                      : `Claim +৳${activeQuizTask.reward.toFixed(2)}`}
+                  </button>
+                </div>
+              )}
+
+              {quizResultState === "wrong" && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-center text-red-700 text-xs font-bold flex items-center justify-center gap-1.5">
+                  <AlertCircle size={16} />
+                  <span>
+                    {language === "bn" ? "ভুল উত্তর! আবার চেষ্টা করুন।" : "Wrong answer! Try again."}
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

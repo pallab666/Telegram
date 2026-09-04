@@ -28,10 +28,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 w-full z-40 flex justify-center pointer-events-none"
+      className="fixed bottom-0 left-0 right-0 w-full z-50 flex justify-center pointer-events-none"
       id="bottom-navigation-bar"
     >
-      <div className="w-full max-w-md h-[72px] bg-white border-t border-slate-200 flex items-center justify-around px-2 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] pointer-events-auto rounded-t-3xl">
+      <div className="w-full max-w-md h-[72px] bg-white/95 backdrop-blur-md border-t border-slate-200/90 flex items-center justify-around px-2 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] pointer-events-auto rounded-t-3xl">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;

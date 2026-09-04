@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { motion } from "motion/react";
-import { ChevronLeft, ChevronRight, Play, Film } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Film, Eye } from "lucide-react";
 import { VideoClip } from "../types";
 import { triggerHaptic } from "../utils/telegram";
 
@@ -9,6 +9,59 @@ interface MoviesClipsSectionProps {
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
   onWatchVideo: (video: VideoClip) => void;
+  highlightedVideoId?: string | null;
+  language?: "bn" | "en";
+}
+
+function toBanglaDigits(numStr: string): string {
+  const bnDigits: { [key: string]: string } = {
+    "0": "০",
+    "1": "১",
+    "2": "২",
+    "3": "৩",
+    "4": "৪",
+    "5": "৫",
+    "6": "৬",
+    "7": "৭",
+    "8": "৮",
+    "9": "৯",
+  };
+  return numStr.replace(/[0-9]/g, (d) => bnDigits[d] || d);
+}
+
+export function formatViews(views: string | number | undefined, isBn: boolean = true): string {
+  let count = 0;
+  if (typeof views === "number") {
+    count = views;
+  } else if (typeof views === "string") {
+    const cleaned = views.replace(/[^0-9.]/g, "");
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed)) {
+      if (views.toLowerCase().includes("k")) {
+        count = parsed * 1000;
+      } else if (views.toLowerCase().includes("m")) {
+        count = parsed * 1000000;
+      } else {
+        count = parsed;
+      }
+    }
+  }
+
+  let formatted = "";
+  if (count >= 1000000) {
+    formatted = `${(count / 1000000).toFixed(1)}M`;
+  } else if (count >= 1000) {
+    formatted = `${(count / 1000).toFixed(1)}K`;
+  } else {
+    formatted = `${Math.round(count)}`;
+  }
+
+  formatted = formatted.replace(".0K", "K").replace(".0M", "M");
+
+  if (isBn) {
+    return `${toBanglaDigits(formatted)} ভিউ`;
+  }
+  return `${formatted} views`;
 }
 
 export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
@@ -16,7 +69,10 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
   selectedCategory,
   onSelectCategory,
   onWatchVideo,
+  highlightedVideoId,
+  language = "bn",
 }) => {
+  const isBn = language !== "en";
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const categories = [
@@ -109,15 +165,22 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
             </p>
           </div>
         ) : (
-          filteredVideos.map((video) => (
-            <div
-              key={video.id}
-              className="group relative overflow-hidden rounded-[1.5rem] bg-white shadow-sm border-[3px] border-black transition-transform active:scale-[0.98] cursor-pointer flex flex-col"
-              onClick={() => {
-                triggerHaptic("medium");
-                onWatchVideo(video);
-              }}
-            >
+          filteredVideos.map((video) => {
+            const isHighlighted = highlightedVideoId === video.id;
+            return (
+              <div
+                key={video.id}
+                id={`video-card-${video.id}`}
+                className={`group relative overflow-hidden rounded-[1.5rem] bg-white shadow-sm border-[3px] transition-all cursor-pointer flex flex-col ${
+                  isHighlighted
+                    ? "border-amber-400 ring-4 ring-amber-400/70 shadow-lg shadow-amber-400/30 scale-[1.03] animate-pulse"
+                    : "border-black active:scale-[0.98]"
+                }`}
+                onClick={() => {
+                  triggerHaptic("medium");
+                  onWatchVideo(video);
+                }}
+              >
               {/* Thumbnail Container */}
               <div className="relative aspect-video w-full bg-slate-900 border-b-[3px] border-black overflow-hidden">
                 <img
@@ -132,9 +195,22 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
                   +৳{(video.reward || 3).toFixed(1)}
                 </div>
 
-                {video.watched && (
-                  <div className="absolute top-1.5 left-1.5 bg-black/70 backdrop-blur-xs text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-emerald-500/30">
+                {video.watched ? (
+                  <div className="absolute top-1.5 left-1.5 bg-black/75 backdrop-blur-xs text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-emerald-500/30 shadow-sm">
                     <span>✓ দেখা হয়েছে</span>
+                  </div>
+                ) : (
+                  <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-slate-200 text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-white/10 shadow-sm">
+                    <Eye className="w-2.5 h-2.5 text-cyan-300" />
+                    <span>{formatViews(video.viewCount ?? video.views, isBn)}</span>
+                  </div>
+                )}
+
+                {/* View count tag on bottom-left of thumbnail when watched is shown on top */}
+                {video.watched && (
+                  <div className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-xs text-slate-200 text-[8px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-white/10 shadow-sm">
+                    <Eye className="w-2.5 h-2.5 text-cyan-300" />
+                    <span>{formatViews(video.viewCount ?? video.views, isBn)}</span>
                   </div>
                 )}
 
@@ -146,14 +222,18 @@ export const MoviesClipsSection: React.FC<MoviesClipsSectionProps> = ({
               </div>
 
               {/* Title area */}
-              <div className="bg-gradient-to-b from-[#1e3a8a] to-[#1e40af] p-2.5 flex items-center justify-center flex-1">
-                <h4 className="font-black text-[10px] text-center text-white leading-tight line-clamp-2 uppercase">
+              <div className="bg-gradient-to-b from-[#1e3a8a] to-[#1e40af] p-2.5 flex flex-col justify-between flex-1">
+                <h4 className="font-black text-[10px] text-center text-white leading-tight line-clamp-2 uppercase mb-1.5">
                   {video.title}
                 </h4>
+                <div className="flex items-center justify-center gap-1 text-[9px] font-bold text-blue-200/90 pt-0.5 border-t border-blue-400/20">
+                  <Eye className="w-3 h-3 text-cyan-300" />
+                  <span>{formatViews(video.viewCount ?? video.views, isBn)}</span>
+                </div>
               </div>
             </div>
-          ))
-        )}
+          );
+        }))}
       </div>
     </motion.div>
   );

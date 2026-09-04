@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Copy,
@@ -7,7 +7,6 @@ import {
   Send,
   Users,
   UserCheck,
-  UserX,
   Crown,
   Gift,
   Hourglass,
@@ -15,9 +14,20 @@ import {
   MoreVertical,
   Settings,
   DollarSign,
+  Sparkles,
+  ShieldCheck,
+  CheckCircle2,
+  Lock,
+  Clock,
+  CheckSquare,
+  AlertCircle,
+  PlusCircle,
+  TrendingUp,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { triggerHaptic } from "../utils/telegram";
+import { playAppSound } from "../utils/preferences";
+import { ReferredUser } from "../types";
 
 interface ReferModalProps {
   isOpen: boolean;
@@ -28,15 +38,19 @@ interface ReferModalProps {
   userAvatar?: string;
   onOpenSettings?: () => void;
   language?: 'bn' | 'en';
+  onShowToast?: (message: string) => void;
+  onClaimMilestone?: (taka: number, videos: number, milestoneFriends: number) => void;
+  referrals?: ReferredUser[];
+  onAddTestReferral?: () => void;
+  onSimulateReferralProgress?: (id: string) => void;
 }
 
-const REWARD_TIERS = [
+export const REWARD_TIERS = [
   {
     friends: 1,
     taka: 50,
     videos: 2,
-    btnClass:
-      "bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/30",
+    btnClass: "bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/30",
   },
   {
     friends: 5,
@@ -54,22 +68,19 @@ const REWARD_TIERS = [
     friends: 20,
     taka: 400,
     videos: 40,
-    btnClass:
-      "bg-gradient-to-r from-emerald-500 to-green-500 shadow-emerald-500/30",
+    btnClass: "bg-gradient-to-r from-emerald-500 to-green-500 shadow-emerald-500/30",
   },
   {
     friends: 50,
     taka: 1000,
     videos: 100,
-    btnClass:
-      "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/30",
+    btnClass: "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/30",
   },
   {
     friends: 100,
     taka: 2000,
     videos: 200,
-    btnClass:
-      "bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/30",
+    btnClass: "bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/30",
   },
   {
     friends: 300,
@@ -87,15 +98,13 @@ const REWARD_TIERS = [
     friends: 1000,
     taka: 20000,
     videos: 2000,
-    btnClass:
-      "bg-gradient-to-r from-emerald-500 to-green-500 shadow-emerald-500/30",
+    btnClass: "bg-gradient-to-r from-emerald-500 to-green-500 shadow-emerald-500/30",
   },
   {
     friends: 2000,
     taka: 50000,
     videos: 5000,
-    btnClass:
-      "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/30",
+    btnClass: "bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-500/30",
   },
 ];
 
@@ -103,57 +112,218 @@ export const ReferModal: React.FC<ReferModalProps> = ({
   isOpen,
   onClose,
   referralCode,
-  referralsCount,
   onlineCount = 1,
   userAvatar,
   onOpenSettings,
   language = 'bn',
+  onShowToast,
+  onClaimMilestone,
+  referrals = [],
+  onAddTestReferral,
+  onSimulateReferralProgress,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [localToast, setLocalToast] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'verified'>('all');
+
+  // Claimed milestones state persisted in localStorage
+  const [claimedMilestones, setClaimedMilestones] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('smart_earning_claimed_ref_tiers');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
+  // Dynamic real-time countdown to midnight (next daily reset)
+  const [timeLeft, setTimeLeft] = useState<string>(() => {
+    const now = new Date();
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const diff = Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
+    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0);
+      const diff = Math.max(0, Math.floor((midnight.getTime() - now.getTime()) / 1000));
+      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+      const s = String(diff % 60).padStart(2, '0');
+      setTimeLeft(`${h}:${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setCopied(false);
+      setLocalToast(null);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   const botInviteLink = `https://t.me/SmartEarning_bot?start=${referralCode}`;
+  
+  // Calculations based on the anti-fraud rules
+  const totalReferrals = referrals.length;
+  const verifiedReferrals = referrals.filter((r) => r.status === 'verified');
+  const pendingReferrals = referrals.filter((r) => r.status === 'pending');
+  
+  const verifiedCount = verifiedReferrals.length;
+  const pendingCount = pendingReferrals.length;
+
+  const pendingBonus = pendingCount * 100;
+  const verifiedBonus = verifiedCount * 100;
+
+  const showNotification = (message: string) => {
+    setLocalToast(message);
+    if (onShowToast) {
+      onShowToast(message);
+    }
+    setTimeout(() => {
+      setLocalToast(null);
+    }, 3200);
+  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(botInviteLink);
     triggerHaptic("success");
+    playAppSound("reward");
     setCopied(true);
 
     confetti({
-      particleCount: 100,
+      particleCount: 80,
       spread: 70,
       origin: { y: 0.6 },
       colors: ["#4F46E5", "#10B981", "#F59E0B"],
       zIndex: 9999,
     });
 
-    setTimeout(() => setCopied(false), 2000);
+    showNotification(
+      language === 'bn'
+        ? "✅ রেফারেল লিংক কপি হয়েছে! বন্ধুদের সাথে শেয়ার করুন"
+        : "✅ Referral link copied! Share with your friends"
+    );
+
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const handleSendToInbox = () => {
     triggerHaptic("success");
+    playAppSound("reward");
+    const shareText = language === 'bn'
+      ? `🎁 Smart Earning এ যোগ দিয়ে প্রতিদিন ফ্রি টাকা ইনকাম করুন! ৩ দিন নিয়মিত কাজ করে জিতে নিন আকর্ষণীয় বোনাস। লিংক:`
+      : `🎁 Join Smart Earning and earn daily cash! Active for 3 days to unlock big bonuses:`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(botInviteLink)}&text=${encodeURIComponent(shareText)}`;
+
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+
     confetti({
-      particleCount: 50,
+      particleCount: 60,
       spread: 60,
       origin: { y: 0.8 },
       zIndex: 9999,
     });
+
+    showNotification(
+      language === 'bn'
+        ? "🚀 ইনবক্স ও বন্ধুদের সাথে শেয়ার লিংক খোলা হয়েছে!"
+        : "🚀 Telegram share link opened!"
+    );
   };
+
+  const handleClaimTier = (tier: typeof REWARD_TIERS[0]) => {
+    // Verified referrals rule: must have reached 3 days active & 20 tasks
+    const remaining = tier.friends - verifiedCount;
+
+    // Condition 1: Not enough verified referrals
+    if (remaining > 0) {
+      const message = language === 'bn'
+        ? `⚠️ এই রিওয়ার্ড ক্লেইম করতে আরও ${remaining} টি ভেরিফাইড রেফার বাকি আছে! (রেফারেলদের ৩ দিন সক্রিয় ও ২০টি টাস্ক সম্পন্ন করতে হবে)`
+        : `⚠️ You need ${remaining} more verified referral${remaining > 1 ? 's' : ''} (3 days active & 20 tasks required)!`;
+
+      triggerHaptic("warning");
+      playAppSound("toggle");
+      showNotification(message);
+      return;
+    }
+
+    // Condition 2: Already claimed
+    if (claimedMilestones.includes(tier.friends)) {
+      const message = language === 'bn'
+        ? `ℹ️ আপনি ইতিমধ্যে ${tier.friends} ফ্রেন্ডস রিওয়ার্ডটি ক্লেইম করেছেন!`
+        : `ℹ️ You have already claimed the ${tier.friends} friends reward!`;
+
+      triggerHaptic("light");
+      showNotification(message);
+      return;
+    }
+
+    // Condition 3: Claim successfully!
+    const updated = [...claimedMilestones, tier.friends];
+    setClaimedMilestones(updated);
+    try {
+      localStorage.setItem('smart_earning_claimed_ref_tiers', JSON.stringify(updated));
+    } catch (e) {}
+
+    triggerHaptic("success");
+    playAppSound("win");
+
+    confetti({
+      particleCount: 120,
+      spread: 80,
+      origin: { y: 0.6 },
+      colors: ["#4F46E5", "#10B981", "#F59E0B", "#EC4899"],
+      zIndex: 99999,
+    });
+
+    const successMsg = language === 'bn'
+      ? `🎉 অভিনন্দন! ${tier.friends} ভেরিফাইড রেফারেল মাইলস্টোন বোনাস ৳${tier.taka}.00 মূল ব্যালেন্সে যোগ হয়েছে!`
+      : `🎉 Congratulations! ৳${tier.taka}.00 verified referral bonus successfully added to main balance!`;
+
+    showNotification(successMsg);
+
+    if (onClaimMilestone) {
+      onClaimMilestone(tier.taka, tier.videos, tier.friends);
+    }
+  };
+
+  const displayedReferrals = referrals.filter((r) => {
+    if (activeTab === 'pending') return r.status === 'pending';
+    if (activeTab === 'verified') return r.status === 'verified';
+    return true;
+  });
 
   return (
     <motion.div
       initial={{ opacity: 0, y: "100%" }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      className="fixed inset-0 z-30 flex flex-col bg-[#eef2ff] sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden"
+      className="fixed inset-0 z-40 flex flex-col bg-[#eef2ff] sm:max-w-md sm:mx-auto sm:border-x border-slate-200 overflow-hidden"
     >
+      {/* Floating Modal Toast Notification */}
+      <AnimatePresence>
+        {localToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -25, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900/95 text-white font-bold text-xs rounded-2xl shadow-2xl flex items-center gap-2 border border-slate-700 max-w-[92%] text-center backdrop-blur-md"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0 animate-pulse" />
+            <span className="leading-snug">{localToast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Status Bar (Purple) */}
       <div className="bg-[#a855f7] px-4 py-2.5 flex items-center justify-between text-white shrink-0 shadow-sm relative z-20">
         <button
@@ -161,7 +331,7 @@ export const ReferModal: React.FC<ReferModalProps> = ({
             triggerHaptic("light");
             onClose();
           }}
-          className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors"
+          className="p-1 -ml-1 rounded-full hover:bg-white/20 transition-colors cursor-pointer"
         >
           <X size={24} />
         </button>
@@ -194,220 +364,495 @@ export const ReferModal: React.FC<ReferModalProps> = ({
         </div>
         <button
           onClick={onOpenSettings}
-          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner"
+          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/30 transition-colors shadow-inner cursor-pointer"
         >
           <Settings size={20} className="text-yellow-300" />
         </button>
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 w-full">
-        {/* PREMIUM REWARDS CARD */}
+      <div className="flex-1 overflow-y-auto px-4 py-5 w-full space-y-5 pb-28">
+        {/* HERO REWARDS CARD */}
         <div className="bg-gradient-to-br from-[#7e22ce] via-[#d946ef] to-[#f43f5e] rounded-[2.5rem] p-6 shadow-xl shadow-purple-500/20 text-center relative overflow-hidden">
-          {/* Decorative glows */}
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
 
           <div className="relative z-10">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/20 text-white text-[10px] font-black tracking-wider mb-5 backdrop-blur-sm shadow-sm border border-white/10 uppercase">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/20 text-white text-[10px] font-black tracking-wider mb-4 backdrop-blur-sm shadow-sm border border-white/10 uppercase">
               <Crown size={14} className="text-yellow-300 drop-shadow-sm" />{" "}
-              PREMIUM REWARDS
+              {language === 'bn' ? 'সুরক্ষিত রেফারেল সিস্টেম' : 'SECURE REFERRAL PROGRAM'}
             </div>
 
-            <h2 className="text-3xl font-black text-white mb-3 drop-shadow-md tracking-tight">
-              Invite Friends
+            <h2 className="text-3xl font-black text-white mb-2 drop-shadow-md tracking-tight">
+              {language === 'bn' ? 'বন্ধু ইনভাইট করুন' : 'Invite Friends'}
             </h2>
             <p className="text-white/95 text-[13px] font-medium leading-relaxed px-2 drop-shadow-sm">
-              For every successful referral you will get{" "}
-              <span className="font-black text-yellow-300 text-[15px]">
-                ৳100.00
-              </span>{" "}
-              directly in pending balance! It moves to main balance once they
-              start working.
+              {language === 'bn' ? (
+                <>
+                  প্রতিটি সফল রেফারেলের জন্য বোনাস <span className="font-black text-yellow-300 text-[15px]">৳১০০.০০</span>! রেফারেল বন্ধু <span className="font-black text-white underline">৩ দিন সক্রিয় ও ২০টি টাস্ক</span> শেষ করলেই টাকা সরাসরি মূল ব্যালেন্সে যুক্ত হবে।
+                </>
+              ) : (
+                <>
+                  Earn <span className="font-black text-yellow-300 text-[15px]">৳100.00</span> per verified referral! Bonus unlocks to main balance once your friend is <span className="font-black text-white underline">active for 3 days & completes 20 tasks</span>.
+                </>
+              )}
             </p>
 
-            {/* Pending Bonus Box */}
-            <div className="bg-black/25 backdrop-blur-md border border-white/5 rounded-[1.5rem] p-4 mt-6 flex justify-between items-center shadow-inner">
-              <div className="text-left">
-                <div className="text-white/80 text-[10px] font-black tracking-wider mb-1 uppercase">
-                  Pending Referral Bonus
+            {/* Two Balanced Boxes: Pending Balance & Transferred to Main */}
+            <div className="grid grid-cols-2 gap-2.5 mt-5">
+              {/* Pending Box */}
+              <div className="bg-amber-950/40 backdrop-blur-md border border-amber-300/30 rounded-[1.25rem] p-3 text-left shadow-inner relative overflow-hidden">
+                <div className="flex items-center justify-between text-amber-200 text-[10px] font-black uppercase tracking-wider mb-1">
+                  <span>{language === 'bn' ? 'পেন্ডিং বোনাস' : 'Pending Bonus'}</span>
+                  <Hourglass size={12} className="text-amber-300 animate-spin" />
                 </div>
-                <div className="text-3xl font-black text-[#4ade80] drop-shadow-sm">
-                  ৳0.00
+                <div className="text-2xl font-black text-amber-300 font-mono drop-shadow-sm">
+                  ৳{pendingBonus.toFixed(2)}
+                </div>
+                <div className="text-[10px] text-amber-100/80 font-medium mt-0.5 leading-tight">
+                  {language === 'bn' ? '৩ দিন ও ২০ টাস্ক শর্ত বাকি' : 'Waiting for criteria'}
                 </div>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.4)] border border-yellow-200">
-                <DollarSign className="text-yellow-900" size={24} />
+
+              {/* Main Balance Unlocked Box */}
+              <div className="bg-emerald-950/40 backdrop-blur-md border border-emerald-300/30 rounded-[1.25rem] p-3 text-left shadow-inner relative overflow-hidden">
+                <div className="flex items-center justify-between text-emerald-200 text-[10px] font-black uppercase tracking-wider mb-1">
+                  <span>{language === 'bn' ? 'মূল ব্যালেন্সে যোগ' : 'Added to Wallet'}</span>
+                  <CheckCircle2 size={12} className="text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-emerald-400 font-mono drop-shadow-sm">
+                  ৳{verifiedBonus.toFixed(2)}
+                </div>
+                <div className="text-[10px] text-emerald-100/80 font-medium mt-0.5 leading-tight">
+                  {language === 'bn' ? 'সফল ও উত্তোলনযোগ্য' : 'Ready to withdraw'}
+                </div>
               </div>
             </div>
 
             {/* Send to Inbox Button */}
             <button
               onClick={handleSendToInbox}
-              className="w-full mt-4 bg-gradient-to-b from-[#fde047] to-[#f59e0b] shadow-[0_4px_0_#b45309] rounded-2xl py-3.5 flex items-center justify-center gap-2 transition-all active:shadow-[0_0px_0_#b45309] active:translate-y-1"
+              className="w-full mt-4 bg-gradient-to-b from-[#fde047] to-[#f59e0b] shadow-[0_4px_0_#b45309] hover:brightness-105 rounded-2xl py-3.5 flex items-center justify-center gap-2 transition-all active:shadow-[0_0px_0_#b45309] active:translate-y-1 cursor-pointer"
             >
               <Send className="text-[#78350f]" size={20} />
-              <span className="text-[#78350f] font-black text-[17px]">
-                Send to Inbox
+              <span className="text-[#78350f] font-black text-[16px]">
+                {language === 'bn' ? 'টেলিগ্রাম ইনবক্সে শেয়ার করুন' : 'Send to Inbox'}
               </span>
             </button>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-3 gap-3 mt-6">
-              <div className="bg-white/10 backdrop-blur-sm border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center shadow-inner">
-                <Users className="text-white/70 mb-1" size={20} />
-                <span className="text-xl font-black text-white">
-                  {referralsCount}
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-2.5 flex flex-col items-center justify-center shadow-inner">
+                <Users className="text-white/80 mb-1" size={16} />
+                <span className="text-lg font-black text-white">
+                  {totalReferrals}
                 </span>
-                <span className="text-[10px] font-bold text-white/70 uppercase">
-                  Joined
-                </span>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center shadow-inner">
-                <UserCheck className="text-emerald-300/90 mb-1" size={20} />
-                <span className="text-xl font-black text-emerald-300">0</span>
-                <span className="text-[10px] font-bold text-white/70 uppercase">
-                  Active
+                <span className="text-[9px] font-bold text-white/80 uppercase">
+                  {language === 'bn' ? 'মোট ইনভাইট' : 'Joined'}
                 </span>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center shadow-inner">
-                <UserX className="text-rose-300/90 mb-1" size={20} />
-                <span className="text-xl font-black text-rose-300">0</span>
-                <span className="text-[10px] font-bold text-white/70 uppercase">
-                  Inactive
+              <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-2.5 flex flex-col items-center justify-center shadow-inner">
+                <Hourglass className="text-amber-300 mb-1" size={16} />
+                <span className="text-lg font-black text-amber-300">
+                  {pendingCount}
+                </span>
+                <span className="text-[9px] font-bold text-white/80 uppercase">
+                  {language === 'bn' ? 'পেন্ডিং' : 'Pending'}
+                </span>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-2.5 flex flex-col items-center justify-center shadow-inner">
+                <UserCheck className="text-emerald-300 mb-1" size={16} />
+                <span className="text-lg font-black text-emerald-300">
+                  {verifiedCount}
+                </span>
+                <span className="text-[9px] font-bold text-white/80 uppercase">
+                  {language === 'bn' ? 'ভেরিফাইড' : 'Verified'}
                 </span>
               </div>
             </div>
 
             {/* Copy Link Box */}
-            <div className="mt-5 bg-black/25 backdrop-blur-md rounded-2xl p-1.5 flex items-center justify-between border border-white/5 shadow-inner">
+            <div className="mt-4 bg-black/25 backdrop-blur-md rounded-2xl p-1.5 flex items-center justify-between border border-white/10 shadow-inner">
               <span className="text-white/80 text-xs font-mono font-medium pl-3 truncate flex-1 text-left">
                 {botInviteLink}
               </span>
               <button
                 onClick={handleCopyLink}
-                className="bg-white/20 hover:bg-white/30 text-white rounded-[0.85rem] px-4 py-2.5 flex items-center gap-1.5 text-sm font-bold transition-colors ml-2 shadow-sm"
+                className="bg-white/20 hover:bg-white/30 text-white rounded-[0.85rem] px-3.5 py-2.5 flex items-center gap-1.5 text-xs font-bold transition-colors ml-2 shadow-sm cursor-pointer flex-shrink-0"
               >
                 {copied ? (
                   <Check size={16} className="text-emerald-300" />
                 ) : (
                   <Copy size={16} />
                 )}
-                <span>Copy</span>
+                <span>{copied ? (language === 'bn' ? 'কপি হয়েছে' : 'Copied') : (language === 'bn' ? 'কপি' : 'Copy')}</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* FREE UNLOCK GUIDE */}
-        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 mt-6 relative overflow-hidden">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center shadow-inner">
-              <Gift className="text-pink-500" size={18} />
-            </div>
-            <h3 className="text-xl font-black text-slate-800 text-center">
-              Free Unlock Guide!
-            </h3>
+        {/* ANTI-FAKE FRAUD PROTECTION POLICY BANNER */}
+        <div className="bg-amber-50 border border-amber-200 rounded-[1.75rem] p-4 shadow-xs">
+          <div className="flex items-center gap-2 mb-2 text-amber-900 font-black text-sm">
+            <ShieldCheck size={18} className="text-amber-600 flex-shrink-0" />
+            <span>{language === 'bn' ? '🛡️ ফেক রেফারেল প্রতিরোধ ও পেন্ডিং নিয়মাবলী:' : '🛡️ Anti-Fraud & Pending Referral Rules:'}</span>
           </div>
-
-          <div className="space-y-4">
-            <div className="flex gap-3.5 items-start">
-              <div className="w-7 h-7 rounded-full bg-indigo-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-indigo-500/20">
-                1
+          <div className="space-y-2 text-xs text-amber-900/90 font-medium">
+            <div className="flex items-start gap-2 bg-white/70 p-2.5 rounded-xl border border-amber-100">
+              <Clock size={15} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-amber-950">{language === 'bn' ? '১. ৩ দিন নিয়মিত সক্রিয় থাকা:' : '1. Active for 3 Days:'}</span>{' '}
+                {language === 'bn' ? 'যাকে রেফার করবেন তাকে একটানা বা ন্যূনতম ৩ দিন অ্যাপে এক্টিভ থাকতে হবে।' : 'Referred friend must be active on the app for at least 3 days.'}
               </div>
-              <p className="text-slate-700 text-[13px] leading-relaxed font-medium">
-                <span className="font-bold text-indigo-700">
-                  Invite Friends:
-                </span>{" "}
-                Get free video access per referral.
-              </p>
             </div>
-            <div className="flex gap-3.5 items-start">
-              <div className="w-7 h-7 rounded-full bg-rose-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-rose-500/20">
-                2
+            <div className="flex items-start gap-2 bg-white/70 p-2.5 rounded-xl border border-amber-100">
+              <CheckSquare size={15} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-amber-950">{language === 'bn' ? '২. ২০টি টাস্ক/ভিডিও সম্পন্ন করা:' : '2. Complete 20 Tasks/Videos:'}</span>{' '}
+                {language === 'bn' ? 'তাকে ন্যূনতম ২০টি কাজ বা ভিডিও ওয়াচ সম্পন্ন করতে হবে।' : 'Referred friend must complete at least 20 tasks or video watches.'}
               </div>
-              <p className="text-slate-700 text-[13px] leading-relaxed font-medium">
-                <span className="font-bold text-rose-700">Milestones:</span>{" "}
-                Watch ads to automatically get a{" "}
-                <span className="font-bold text-rose-600">Gift Card!</span>
-              </p>
             </div>
-            <div className="flex gap-3.5 items-start">
-              <div className="w-7 h-7 rounded-full bg-blue-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-blue-500/20">
-                3
+            <div className="flex items-start gap-2 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200 text-emerald-900">
+              <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-emerald-950">{language === 'bn' ? '৩. স্বয়ংক্রিয় মূল ব্যালেন্সে ট্রান্সফার:' : '3. Auto Transfer to Main Balance:'}</span>{' '}
+                {language === 'bn' ? 'উপরের ২টি শর্ত পূরণ হওয়ামাত্র পেন্ডিং ৳১০০ সরাসরি আপনার মূল ওয়ালেটে যোগ হয়ে যাবে!' : 'Once fulfilled, ৳100 automatically moves from pending to your main wallet balance!'}
               </div>
-              <p className="text-slate-700 text-[13px] leading-relaxed font-medium">
-                <span className="font-bold text-blue-700">Daily Rewards:</span>{" "}
-                Complete tasks to claim referral packages.
-              </p>
             </div>
           </div>
-
-          <button className="w-full mt-6 bg-gradient-to-r from-[#fde047] to-[#eab308] text-yellow-900 font-black rounded-[1.25rem] py-3.5 shadow-md shadow-yellow-400/20 active:scale-95 transition-transform flex items-center justify-center gap-1.5 uppercase tracking-wider text-sm border border-yellow-300">
-            WORK DAILY, GET PAID 100% 💸
-          </button>
         </div>
 
-        {/* 24H DAILY REWARDS */}
-        <div className="mt-8 mb-6">
-          <div className="flex items-center justify-between mb-5 px-1">
+        {/* REFERRED FRIENDS PROGRESS TRACKER (LIST) */}
+        <div className="bg-white rounded-[2rem] p-5 shadow-xs border border-slate-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="text-purple-600 w-5 h-5" />
+              <h3 className="text-base font-black text-slate-800">
+                {language === 'bn' ? 'রেফারেল প্রগ্রেস তালিকা' : 'Referred Friends Tracker'}
+              </h3>
+            </div>
+            {/* Quick test simulation button */}
+            {onAddTestReferral && (
+              <button
+                onClick={() => {
+                  triggerHaptic("medium");
+                  onAddTestReferral();
+                }}
+                className="text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-700 font-black px-2.5 py-1 rounded-lg border border-purple-200 flex items-center gap-1 cursor-pointer transition-colors"
+                title="টেস্ট রেফারেল যোগ করুন"
+              >
+                <PlusCircle size={12} />
+                <span>{language === 'bn' ? '+ টেস্ট রেফারেল' : '+ Test Invite'}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl mb-4 text-xs font-black">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                activeTab === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? `সবাই (${totalReferrals})` : `All (${totalReferrals})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                activeTab === 'pending'
+                  ? 'bg-amber-400 text-amber-950 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? `পেন্ডিং (${pendingCount})` : `Pending (${pendingCount})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('verified')}
+              className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                activeTab === 'verified'
+                  ? 'bg-emerald-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? `ভেরিফাইড (${verifiedCount})` : `Verified (${verifiedCount})`}
+            </button>
+          </div>
+
+          {/* Referral List Items */}
+          {displayedReferrals.length === 0 ? (
+            <div className="text-center py-6 px-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2 text-purple-600">
+                <Users size={24} />
+              </div>
+              <p className="text-slate-700 font-bold text-xs mb-1">
+                {activeTab === 'all'
+                  ? (language === 'bn' ? 'এখনো কোনো রেফারেল নেই' : 'No referrals yet')
+                  : activeTab === 'pending'
+                  ? (language === 'bn' ? 'কোনো পেন্ডিং রেফারেল নেই' : 'No pending referrals')
+                  : (language === 'bn' ? 'কোনো ভেরিফাইড রেফারেল নেই' : 'No verified referrals')}
+              </p>
+              <p className="text-slate-500 text-[11px] mb-3">
+                {language === 'bn'
+                  ? 'আপনার রেফারেল লিংক বন্ধুদের সাথে শেয়ার করুন।'
+                  : 'Share your referral link with friends to earn!'}
+              </p>
+              {onAddTestReferral && (
+                <button
+                  onClick={onAddTestReferral}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white font-black text-xs rounded-xl shadow-xs hover:bg-purple-700 cursor-pointer"
+                >
+                  <PlusCircle size={14} />
+                  <span>{language === 'bn' ? 'টেস্ট করতে রেফারেল যোগ করুন' : 'Add Test Referral'}</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {displayedReferrals.map((member) => {
+                const isVerified = member.status === 'verified';
+                const daysProgress = Math.min(100, Math.round((member.daysActive / 3) * 100));
+                const tasksProgress = Math.min(100, Math.round((member.tasksCompleted / 20) * 100));
+
+                return (
+                  <div
+                    key={member.id}
+                    className={`p-3.5 rounded-2xl border transition-all ${
+                      isVerified
+                        ? 'bg-emerald-50/40 border-emerald-200'
+                        : 'bg-amber-50/30 border-amber-200/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={member.avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + member.id}
+                          alt={member.name}
+                          className="w-9 h-9 rounded-full bg-slate-200 object-cover border border-slate-300"
+                        />
+                        <div>
+                          <div className="font-black text-slate-800 text-xs">
+                            {member.name}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {member.joinedDate}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Chip */}
+                      <div>
+                        {isVerified ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <CheckCircle2 size={11} />
+                            {language === 'bn' ? 'ভেরিফাইড (৳১০০ মূল ব্যালেন্সে)' : 'Verified (৳100 Added)'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                            <Hourglass size={10} className="animate-spin" />
+                            {language === 'bn' ? 'পেন্ডিং (শর্ত বাকি)' : 'Pending Criteria'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Criteria Progress Bars */}
+                    <div className="space-y-2 mt-2 pt-2 border-t border-slate-100">
+                      {/* Active Days */}
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-0.5">
+                          <span className="flex items-center gap-1">
+                            <Clock size={11} className="text-indigo-500" />
+                            {language === 'bn' ? 'সক্রিয় দিন:' : 'Days Active:'}
+                          </span>
+                          <span className={member.daysActive >= 3 ? 'text-emerald-600 font-black' : 'text-slate-800'}>
+                            {member.daysActive} / ৩ দিন {member.daysActive >= 3 && '✓'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              member.daysActive >= 3 ? 'bg-emerald-500' : 'bg-indigo-500'
+                            }`}
+                            style={{ width: `${daysProgress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tasks Done */}
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-0.5">
+                          <span className="flex items-center gap-1">
+                            <CheckSquare size={11} className="text-purple-500" />
+                            {language === 'bn' ? 'টাস্ক সম্পন্ন:' : 'Tasks Completed:'}
+                          </span>
+                          <span className={member.tasksCompleted >= 20 ? 'text-emerald-600 font-black' : 'text-slate-800'}>
+                            {member.tasksCompleted} / ২০ টাস্ক {member.tasksCompleted >= 20 && '✓'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              member.tasksCompleted >= 20 ? 'bg-emerald-500' : 'bg-purple-500'
+                            }`}
+                            style={{ width: `${tasksProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Simulation Button for Testing Progress */}
+                    {!isVerified && onSimulateReferralProgress && (
+                      <div className="mt-2.5 pt-2 border-t border-amber-100 flex justify-end">
+                        <button
+                          onClick={() => {
+                            triggerHaptic("medium");
+                            onSimulateReferralProgress(member.id);
+                          }}
+                          className="text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <TrendingUp size={11} />
+                          <span>{language === 'bn' ? 'সিমুলেট: +১ দিন ও +৬ টাস্ক টেস্ট' : 'Simulate +1 Day & +6 Tasks'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 24H DAILY REWARDS MILESTONE TIERS (VERIFIED REFERRALS REQUIRED) */}
+        <div className="pb-6">
+          <div className="flex items-center justify-between mb-4 px-1">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center shadow-inner">
                 <Gift className="text-purple-600" size={18} />
               </div>
-              <h3 className="text-lg font-black text-slate-800">
-                24H Daily Rewards
-              </h3>
-            </div>
-            <div className="flex items-center gap-1 bg-rose-50 text-rose-500 px-2.5 py-1.5 rounded-xl text-[11px] font-black border border-rose-100 shadow-sm tracking-wider">
-              <Hourglass size={12} />
-              <span>12:22:18</span>
-            </div>
-          </div>
-
-          <div className="bg-blue-50/70 border border-blue-100 rounded-[1.25rem] p-4 flex justify-center items-center gap-3 mb-6 shadow-sm">
-            <span className="text-blue-900 font-bold text-[13px]">
-              আজকের রেফার:
-            </span>
-            <div className="bg-white border border-blue-200 text-blue-700 font-black px-4 py-1 rounded-xl shadow-sm text-lg">
-              {referralsCount}
-            </div>
-          </div>
-
-          <div className="space-y-3.5">
-            {REWARD_TIERS.map((tier, idx) => (
-              <div
-                key={idx}
-                className="bg-white rounded-[1.5rem] p-4 flex items-center justify-between shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] border border-slate-100 relative overflow-hidden group"
-              >
-                {/* Subtle background glow */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 opacity-50 pointer-events-none rounded-full blur-2xl -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500" />
-
-                <div className="relative z-10">
-                  <h4 className="font-black text-slate-800 text-[15px] mb-2">
-                    Invite {tier.friends} Friends
-                  </h4>
-                  <div className="flex items-center gap-1.5 text-[10px] font-black">
-                    <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md border border-emerald-100 shadow-sm">
-                      +৳{tier.taka}.00
-                    </span>
-                    <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md border border-blue-100 shadow-sm">
-                      +{tier.videos} Free Videos
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => triggerHaptic("medium")}
-                  className={`relative z-10 ${tier.btnClass} text-white font-black text-[13px] tracking-wide px-5 py-2.5 rounded-[1rem] shadow-md active:scale-90 transition-all`}
-                >
-                  Claim
-                </button>
+              <div>
+                <h3 className="text-base font-black text-slate-800 leading-tight">
+                  {language === 'bn' ? 'ভেরিফাইড রেফারেল মাইলস্টোন' : 'Verified Referral Milestones'}
+                </h3>
+                <p className="text-[10px] text-slate-500 font-semibold">
+                  {language === 'bn' ? '৩ দিন সক্রিয় ও ২০ টাস্ক করা রেফারেল দিয়ে ক্যাশ ক্লেইম করুন' : 'Cash bonus for verified referrals'}
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="flex items-center gap-1 bg-rose-50 text-rose-500 px-2.5 py-1.5 rounded-xl text-[11px] font-black border border-rose-100 shadow-xs tracking-wider flex-shrink-0 font-mono">
+              <Hourglass size={12} className="animate-spin" />
+              <span>{timeLeft}</span>
+            </div>
+          </div>
+
+          {/* Verified Referral Counter Banner */}
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-[1.25rem] p-3 flex justify-between items-center mb-4 shadow-xs">
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-emerald-600" />
+              <span className="text-emerald-950 font-bold text-xs">
+                {language === 'bn' ? 'আপনার ভেরিফাইড রেফারেল সংখ্যা:' : 'Your Verified Referrals:'}
+              </span>
+            </div>
+            <div className="bg-white border border-emerald-300 text-emerald-700 font-black px-3 py-1 rounded-xl shadow-xs text-base font-mono">
+              {verifiedCount}
+            </div>
+          </div>
+
+          {/* All Reward Tiers: 1, 5, 10, 20, 50, 100, 300, 500, 1000, 2000 */}
+          <div className="space-y-3">
+            {REWARD_TIERS.map((tier) => {
+              const isClaimed = claimedMilestones.includes(tier.friends);
+              const isEligible = verifiedCount >= tier.friends;
+              const remaining = tier.friends - verifiedCount;
+
+              return (
+                <div
+                  key={tier.friends}
+                  className={`bg-white rounded-[1.5rem] p-4 flex items-center justify-between border transition-all relative overflow-hidden ${
+                    isClaimed
+                      ? "border-emerald-200 bg-emerald-50/30"
+                      : isEligible
+                      ? "border-purple-300 ring-2 ring-purple-400/20 shadow-md shadow-purple-500/10"
+                      : "border-slate-200/80 shadow-xs"
+                  }`}
+                >
+                  <div className="relative z-10 flex-1 pr-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h4 className="font-black text-slate-800 text-sm">
+                        {language === 'bn'
+                          ? `${tier.friends} জন ভেরিফাইড বন্ধু`
+                          : `Invite ${tier.friends} Verified Friends`}
+                      </h4>
+                      {isClaimed ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 size={11} />
+                          {language === 'bn' ? 'ক্লেইমড' : 'Claimed'}
+                        </span>
+                      ) : isEligible ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full animate-pulse">
+                          ✨ {language === 'bn' ? 'প্রস্তুত' : 'Ready'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                          <Lock size={10} />
+                          {remaining} {language === 'bn' ? 'ভেরিফাইড বাকি' : 'left'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] font-black">
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-200 shadow-2xs font-mono">
+                        +৳{tier.taka}.00
+                      </span>
+                      <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg border border-blue-200 shadow-2xs">
+                        +{tier.videos} {language === 'bn' ? 'ফ্রি ভিডিও' : 'Videos'}
+                      </span>
+                    </div>
+
+                    {/* Progress indicator */}
+                    {!isClaimed && (
+                      <div className="mt-2 w-full max-w-[170px] bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            isEligible ? 'bg-purple-500' : 'bg-slate-400'
+                          }`}
+                          style={{
+                            width: `${Math.min(100, Math.round((verifiedCount / tier.friends) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Claim Button */}
+                  <button
+                    onClick={() => handleClaimTier(tier)}
+                    className={`relative z-10 text-white font-black text-xs tracking-wide px-4 py-2.5 rounded-xl shadow-md active:scale-95 transition-all cursor-pointer flex-shrink-0 flex items-center gap-1 ${
+                      isClaimed
+                        ? "bg-slate-300 text-slate-600 shadow-none cursor-default"
+                        : isEligible
+                        ? `${tier.btnClass} ring-2 ring-white/50 animate-bounce`
+                        : "bg-slate-800 hover:bg-slate-900 text-slate-100"
+                    }`}
+                  >
+                    {isClaimed ? (
+                      <>
+                        <Check size={14} className="text-emerald-600" />
+                        <span>{language === 'bn' ? 'ক্লেইমড' : 'Claimed'}</span>
+                      </>
+                    ) : (
+                      <span>{language === 'bn' ? 'ক্লেইম' : 'Claim'}</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Bottom padding for scrolling */}
+        {/* Bottom padding for mobile scrolling */}
         <div className="h-24"></div>
       </div>
     </motion.div>

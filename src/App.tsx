@@ -16,7 +16,7 @@ import { VideoPlayerModal } from './components/VideoPlayerModal';
 import { DailySpinWheel } from './components/DailySpinWheel';
 import { InitialSetupModal } from './components/InitialSetupModal';
 import { INITIAL_USER, INITIAL_TASKS, INITIAL_VIDEOS, INITIAL_LEADERBOARD } from './data/mockData';
-import { UserData, EarnTask, VideoClip, WithdrawalRecord } from './types';
+import { UserData, EarnTask, VideoClip, WithdrawalRecord, ReferredUser } from './types';
 import { initTelegramApp, getTelegramUser, triggerHaptic } from './utils/telegram';
 import { getAdConfig } from './utils/adManager';
 import {
@@ -37,8 +37,14 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        // Clean legacy mock referrals (if default mock was 2)
+        const cleanedReferrals =
+          parsed.referralsCount === 2 && !parsed.hasRealReferrals
+            ? 0
+            : parsed.referralsCount ?? 0;
         return {
           ...parsed,
+          referralsCount: cleanedReferrals,
           minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 1000,
         };
       } catch (e) {
@@ -47,6 +53,7 @@ export default function App() {
     }
     return {
       ...INITIAL_USER,
+      referralsCount: 0,
       minWithdraw: adConfig.minWithdraw || 1000,
     };
   });
@@ -55,11 +62,46 @@ export default function App() {
     const saved = localStorage.getItem('smart_earning_tasks');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Remove legacy mock tasks
+          const cleaned = parsed.filter((t: any) => t && t.id && !t.id.startsWith('mock_task_'));
+          if (cleaned.length > 0) {
+            return cleaned;
+          }
+        }
       } catch (e) {}
     }
     return INITIAL_TASKS;
   });
+
+  // Fetch shared tasks from server so all users see admin-updated links
+  useEffect(() => {
+    const fetchSharedTasks = async () => {
+      try {
+        const res = await fetch('/api/tasks');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.tasks) && data.tasks.length > 0) {
+            setTasks((prev) => {
+              const completedMap = new Map(prev.map((t) => [t.id, t.completed]));
+              const merged = data.tasks.map((t: EarnTask) => ({
+                ...t,
+                completed: Boolean(completedMap.get(t.id)),
+              }));
+              try {
+                localStorage.setItem('smart_earning_tasks', JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch shared tasks', e);
+      }
+    };
+    fetchSharedTasks();
+  }, []);
 
   const [videos, setVideos] = useState<VideoClip[]>(() => {
     try {
@@ -136,6 +178,31 @@ export default function App() {
     ];
   });
 
+  const [referrals, setReferrals] = useState<ReferredUser[]>(() => {
+    try {
+      const stored = localStorage.getItem('smart_earning_referrals');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'ref_sample_1',
+        name: 'সাব্বির হোসেন',
+        username: '@sabbir_pro',
+        joinedDate: '০১/০৯/২০২৬',
+        daysActive: 2,
+        tasksCompleted: 14,
+        status: 'pending',
+        rewardAmount: 100,
+        isTransferredToMain: false,
+      },
+    ];
+  });
+
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -150,6 +217,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<VideoClip | null>(null);
+  const [highlightedVideoId, setHighlightedVideoId] = useState<string | null>(null);
 
   // App preferences (Language & Currency) + Initial Setup Flow
   const [preferences, setPreferences] = useState<AppPreferences>(() => getAppPreferences());
@@ -213,6 +281,87 @@ export default function App() {
     localStorage.setItem('smart_earning_withdrawals', JSON.stringify(withdrawals));
   }, [withdrawals]);
 
+  useEffect(() => {
+    localStorage.setItem('smart_earning_referrals', JSON.stringify(referrals));
+  }, [referrals]);
+
+  const handleAddTestReferral = () => {
+    const sampleNames = ['তানভীর আহমেদ', 'মেহেদী হাসান', 'সুমাইয়া আক্তার', 'আরিফ হোসেন', 'নাদিম ইসলাম', 'রাকিব খান'];
+    const randomName = sampleNames[Math.floor(Math.random() * sampleNames.length)];
+    const newRef: ReferredUser = {
+      id: `ref_${Date.now()}`,
+      name: randomName,
+      username: `@user_${Math.floor(1000 + Math.random() * 9000)}`,
+      joinedDate: new Date().toLocaleDateString(preferences.language === 'bn' ? 'bn-BD' : 'en-US'),
+      daysActive: 1,
+      tasksCompleted: Math.floor(Math.random() * 4) + 1,
+      status: 'pending',
+      rewardAmount: 100,
+      isTransferredToMain: false,
+    };
+    setReferrals((prev) => [newRef, ...prev]);
+    setUser((prev) => ({
+      ...prev,
+      referralsCount: prev.referralsCount + 1,
+    }));
+    showToast(
+      preferences.language === 'bn'
+        ? `🎁 নতুন রেফারেল যোগ হয়েছে! শর্ত (৩ দিন ও ২০ টাস্ক) পূরণ হলে ৳১০০ মূল ব্যালেন্সে যোগ হবে`
+        : `🎁 New referral joined! ৳100 pending verification.`
+    );
+  };
+
+  const handleSimulateReferralProgress = (id: string) => {
+    let unlocked = false;
+    let unlockedName = '';
+    setReferrals((prev) =>
+      prev.map((ref) => {
+        if (ref.id !== id) return ref;
+        const newDays = Math.min(3, ref.daysActive + 1);
+        const newTasks = Math.min(20, ref.tasksCompleted + 7);
+        const willVerify = newDays >= 3 && newTasks >= 20;
+
+        if (willVerify && ref.status === 'pending') {
+          unlocked = true;
+          unlockedName = ref.name;
+          return {
+            ...ref,
+            daysActive: newDays,
+            tasksCompleted: newTasks,
+            status: 'verified',
+            isTransferredToMain: true,
+          };
+        }
+
+        return {
+          ...ref,
+          daysActive: newDays,
+          tasksCompleted: newTasks,
+        };
+      })
+    );
+
+    if (unlocked) {
+      setUser((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance + 100) * 100) / 100,
+        totalEarned: Math.round((prev.totalEarned + 100) * 100) / 100,
+      }));
+      triggerCelebration();
+      showToast(
+        preferences.language === 'bn'
+          ? `🎉 অভিনন্দন! ${unlockedName} ৩ দিন সক্রিয় ও ২০ টাস্ক সম্পন্ন করায় ৳১০০ মূল ব্যালেন্সে যোগ হয়েছে!`
+          : `🎉 Congratulations! ৳100 added to main balance for ${unlockedName}!`
+      );
+    } else {
+      showToast(
+        preferences.language === 'bn'
+          ? `📈 রেফারেল প্রগ্রেস সিমুলেট হয়েছে (+১ দিন, +৭ টাস্ক)`
+          : `📈 Referral progress simulated (+1 day, +7 tasks)`
+      );
+    }
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -233,6 +382,115 @@ export default function App() {
     }
   };
 
+  const handleClaimDailyCheckIn = (reward: number, streak: number, timestamp: number) => {
+    setUser((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + reward) * 100) / 100,
+      totalEarned: Math.round((prev.totalEarned + reward) * 100) / 100,
+      dailyCheckedIn: true,
+      lastCheckInTimestamp: timestamp,
+      checkInStreak: streak,
+    }));
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === 'task_checkin' ? { ...t, completed: true } : t))
+    );
+
+    triggerCelebration();
+    showToast(
+      preferences.language === 'bn'
+        ? `🎉 দৈনিক চেক-ইন বোনাস +৳${reward.toFixed(2)} মূল ব্যালেন্সে যোগ হয়েছে!`
+        : `🎉 Daily check-in reward +৳${reward.toFixed(2)} credited to balance!`
+    );
+  };
+
+  // Automatic 24-hour Daily Check-in Reset Check
+  useEffect(() => {
+    const checkDailyReset = () => {
+      let lastTime = user.lastCheckInTimestamp;
+      if (!lastTime) {
+        const stored = localStorage.getItem('smart_earning_last_checkin_timestamp');
+        if (stored) lastTime = parseInt(stored, 10);
+      }
+      const COOLDOWN = 24 * 60 * 60 * 1000;
+      const isEligible = !lastTime || Date.now() - lastTime >= COOLDOWN;
+
+      if (isEligible && user.dailyCheckedIn) {
+        setUser((prev) => ({ ...prev, dailyCheckedIn: false }));
+        setTasks((prev) =>
+          prev.map((t) => (t.id === 'task_checkin' ? { ...t, completed: false } : t))
+        );
+      }
+    };
+
+    checkDailyReset();
+    const interval = setInterval(checkDailyReset, 5000);
+    return () => clearInterval(interval);
+  }, [user.lastCheckInTimestamp, user.dailyCheckedIn]);
+
+  const scrollToNextUnwatchedVideo = (finishedVideoId: string) => {
+    // Find next unwatched video
+    const currentIndex = videos.findIndex((v) => v.id === finishedVideoId);
+    let nextUnwatched: VideoClip | undefined;
+
+    // Search forward from current index
+    for (let i = currentIndex + 1; i < videos.length; i++) {
+      if (!videos[i].watched && videos[i].id !== finishedVideoId) {
+        nextUnwatched = videos[i];
+        break;
+      }
+    }
+
+    // If not found ahead, search from beginning
+    if (!nextUnwatched) {
+      for (let i = 0; i < currentIndex; i++) {
+        if (!videos[i].watched && videos[i].id !== finishedVideoId) {
+          nextUnwatched = videos[i];
+          break;
+        }
+      }
+    }
+
+    // Close video player modal and ensure main home page is visible
+    setActiveVideo(null);
+    setActiveTab('home');
+    setIsTasksOpen(false);
+    setIsReferOpen(false);
+    setIsRankOpen(false);
+    setIsProfileOpen(false);
+
+    if (nextUnwatched) {
+      const targetVideo = nextUnwatched;
+      // If category filter hides this video, reset to 'all' or that category
+      if (selectedCategory !== 'all' && selectedCategory !== targetVideo.category) {
+        setSelectedCategory('all');
+      }
+
+      setHighlightedVideoId(targetVideo.id);
+
+      // Smooth scroll to the next unwatched video card
+      setTimeout(() => {
+        const el = document.getElementById(`video-card-${targetVideo.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          const sec = document.getElementById('section-movies-clips');
+          sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+
+      // Clear highlight after 4 seconds
+      setTimeout(() => {
+        setHighlightedVideoId((prev) => (prev === targetVideo.id ? null : prev));
+      }, 4000);
+    } else {
+      setTimeout(() => {
+        const sec = document.getElementById('section-movies-clips');
+        sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  };
+
   const handleClaimVideoReward = (videoId: string, reward: number) => {
     setUser((prev) => ({
       ...prev,
@@ -241,11 +499,43 @@ export default function App() {
     }));
 
     setVideos((prev) =>
-      prev.map((v) => (v.id === videoId ? { ...v, watched: true } : v))
+      prev.map((v) => {
+        if (v.id === videoId) {
+          let currentViews = 0;
+          if (typeof v.viewCount === 'number') {
+            currentViews = v.viewCount;
+          } else if (typeof v.views === 'number') {
+            currentViews = v.views;
+          } else if (typeof v.views === 'string') {
+            const parsed = parseInt(v.views.replace(/[^0-9]/g, ''), 10);
+            currentViews = isNaN(parsed) ? 0 : parsed;
+          }
+          const nextCount = currentViews + 1;
+          return {
+            ...v,
+            watched: true,
+            viewCount: nextCount,
+            views: nextCount,
+          };
+        }
+        return v;
+      })
     );
 
+    // Call server to increment view count persistently
+    try {
+      fetch(`/api/videos/${videoId}/view`, { method: 'POST' }).catch(() => {});
+    } catch (e) {}
+
     triggerCelebration();
-    showToast(`🎉 +৳${reward.toFixed(2)} BDT ব্যালেন্সে যুক্ত হয়েছে!`);
+    showToast(
+      preferences.language === 'bn'
+        ? `🎉 +৳${reward.toFixed(2)} BDT ব্যালেন্সে যুক্ত হয়েছে!`
+        : `🎉 +৳${reward.toFixed(2)} BDT added to balance!`
+    );
+
+    // Automatically scroll main page to next available unwatched video
+    scrollToNextUnwatchedVideo(videoId);
   };
 
   const handleCompleteTask = (taskId: string, reward: number) => {
@@ -273,6 +563,20 @@ export default function App() {
 
     triggerCelebration();
     showToast(`🎡 স্পিন থেকে +৳${amount.toFixed(2)} BDT জিতেছেন!`);
+  };
+
+  const handleClaimMilestoneReward = (taka: number, _videos: number, milestoneFriends: number) => {
+    setUser((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + taka) * 100) / 100,
+      totalEarned: Math.round((prev.totalEarned + taka) * 100) / 100,
+    }));
+    triggerCelebration();
+    showToast(
+      preferences.language === 'bn'
+        ? `🎉 ${milestoneFriends} রেফারেল বোনাস +৳${taka}.00 মূল ব্যালেন্সে যোগ হয়েছে!`
+        : `🎉 ${milestoneFriends} referrals reward +৳${taka}.00 added to main balance!`
+    );
   };
 
   const handleRequestWithdraw = (record: WithdrawalRecord) => {
@@ -350,7 +654,27 @@ export default function App() {
     setTasks(INITIAL_TASKS);
     setVideos([]);
     localStorage.removeItem('smart_earning_videos');
+    localStorage.removeItem('smart_earning_tasks');
+    fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: INITIAL_TASKS }),
+    }).catch(() => {});
     showToast('ডাটা সফলভাবে রিসেট করা হয়েছে');
+  };
+
+  const handleUpdateTasks = async (newTasks: EarnTask[]) => {
+    setTasks(newTasks);
+    try {
+      localStorage.setItem('smart_earning_tasks', JSON.stringify(newTasks));
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks: newTasks }),
+      });
+    } catch (err) {
+      console.error('Error saving tasks to server:', err);
+    }
   };
 
   const handleAdminAddVideo = async (video: VideoClip) => {
@@ -415,6 +739,15 @@ export default function App() {
 
   const pendingTasksCount = tasks.filter((t) => !t.completed).length;
 
+  const handleCloseVideoModal = () => {
+    const currentId = activeVideo?.id;
+    const isWatched = activeVideo ? videos.find((v) => v.id === activeVideo.id)?.watched : false;
+    setActiveVideo(null);
+    if (currentId && isWatched) {
+      scrollToNextUnwatchedVideo(currentId);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex justify-center font-sans selection:bg-indigo-100 selection:text-indigo-800">
       {/* Mobile Frame Container */}
@@ -450,6 +783,11 @@ export default function App() {
             minWithdraw={user.minWithdraw}
             onOpenWithdraw={() => setIsWithdrawOpen(true)}
             preferences={preferences}
+            pendingBonus={referrals.filter((r) => r.status === 'pending').length * 100}
+            onOpenRefer={() => {
+              setIsReferOpen(true);
+              setActiveTab('refer');
+            }}
           />
 
           {/* 2. Quick Action Squircles (Tasks, Videos, Refer, Withdraw) */}
@@ -491,13 +829,12 @@ export default function App() {
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
             onWatchVideo={(vid) => setActiveVideo(vid)}
+            highlightedVideoId={highlightedVideoId}
+            language={preferences.language}
           />
         </main>
 
-        {/* Bottom Navigation */}
-        <BottomNav activeTab={activeTab} onSelectTab={handleTabSelect} />
-
-        {/* Interactive Modals */}
+        {/* Tab Views */}
         <TasksModal
           isOpen={isTasksOpen}
           onClose={() => {
@@ -513,19 +850,11 @@ export default function App() {
           dailyCheckedIn={user.dailyCheckedIn}
           onlineCount={onlineCount}
           userAvatar={user.avatarUrl}
+          user={user}
           onOpenSettings={() => setIsSettingsOpen(true)}
           language={preferences.language}
-        />
-
-        <WithdrawModal
-          isOpen={isWithdrawOpen}
-          onClose={() => setIsWithdrawOpen(false)}
-          balance={user.balance}
-          minWithdraw={user.minWithdraw}
-          withdrawals={withdrawals}
-          onRequestWithdraw={handleRequestWithdraw}
           preferences={preferences}
-          onlineCount={onlineCount}
+          onClaimDailyCheckIn={handleClaimDailyCheckIn}
         />
 
         <ReferModal
@@ -540,6 +869,11 @@ export default function App() {
           userAvatar={user.avatarUrl}
           onOpenSettings={() => setIsSettingsOpen(true)}
           language={preferences.language}
+          onShowToast={showToast}
+          onClaimMilestone={handleClaimMilestoneReward}
+          referrals={referrals}
+          onAddTestReferral={handleAddTestReferral}
+          onSimulateReferralProgress={handleSimulateReferralProgress}
         />
 
         <RankModal
@@ -547,6 +881,13 @@ export default function App() {
           onClose={() => {
             setIsRankOpen(false);
             if (activeTab === 'rank') setActiveTab('home');
+          }}
+          user={user}
+          tasks={tasks}
+          videos={videos}
+          onNavigate={(tab) => {
+            setIsRankOpen(false);
+            handleTabSelect(tab as NavTab);
           }}
           onlineCount={onlineCount}
           userAvatar={user.avatarUrl}
@@ -568,6 +909,21 @@ export default function App() {
           onlineCount={onlineCount}
           onOpenSettings={() => setIsSettingsOpen(true)}
           language={preferences.language}
+        />
+
+        {/* Fixed Persistent Bottom Navigation Bar across all tabs */}
+        <BottomNav activeTab={activeTab} onSelectTab={handleTabSelect} />
+
+        {/* Action & Settings Overlays (Highest z-index) */}
+        <WithdrawModal
+          isOpen={isWithdrawOpen}
+          onClose={() => setIsWithdrawOpen(false)}
+          balance={user.balance}
+          minWithdraw={user.minWithdraw}
+          withdrawals={withdrawals}
+          onRequestWithdraw={handleRequestWithdraw}
+          preferences={preferences}
+          onlineCount={onlineCount}
         />
 
         <SettingsModal
@@ -595,6 +951,8 @@ export default function App() {
           onAddVideo={handleAdminAddVideo}
           onDeleteVideo={handleAdminDeleteVideo}
           onlineCount={onlineCount}
+          tasks={tasks}
+          onUpdateTasks={handleUpdateTasks}
         />
 
         <BotSetupGuideModal
@@ -605,7 +963,7 @@ export default function App() {
 
         <VideoPlayerModal
           video={activeVideo}
-          onClose={() => setActiveVideo(null)}
+          onClose={handleCloseVideoModal}
           onClaimReward={handleClaimVideoReward}
           preferences={preferences}
           onlineCount={onlineCount}

@@ -78,7 +78,7 @@ if __name__ == '__main__':
     print("Bot is started...")
     app.run_polling()`;
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm ">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm">
       <div className="relative w-full max-w-lg max-h-[90vh] flex flex-col bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden text-slate-800">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-slate-900 border-b border-slate-800">

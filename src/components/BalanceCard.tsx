@@ -13,6 +13,8 @@ interface BalanceCardProps {
   minWithdraw: number;
   onOpenWithdraw: () => void;
   preferences?: AppPreferences;
+  pendingBonus?: number;
+  onOpenRefer?: () => void;
 }
 
 export const BalanceCard: React.FC<BalanceCardProps> = ({
@@ -20,6 +22,8 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   minWithdraw,
   onOpenWithdraw,
   preferences,
+  pendingBonus,
+  onOpenRefer,
 }) => {
   const isBn = preferences?.language !== "en";
   const currency = preferences?.currency || "BDT";
@@ -39,8 +43,24 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     >
       <div className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#7e22ce] via-[#8b5cf6] to-[#6b21a8] p-6 text-white shadow-xl shadow-purple-900/10 border border-purple-500/20">
         <div className="relative z-10 flex flex-col items-start space-y-4">
-          <div className="text-[15px] font-semibold text-white/90">
-            Total Balance
+          <div className="w-full flex items-center justify-between">
+            <div className="text-[15px] font-semibold text-white/90">
+              Total Balance
+            </div>
+            {pendingBonus && pendingBonus > 0 ? (
+              <button
+                onClick={onOpenRefer}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30 text-[11px] font-bold hover:bg-amber-400/30 transition-colors cursor-pointer"
+                title="রেফারেল পেন্ডিং বিস্তারিত দেখুন"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span>
+                  {isBn
+                    ? `⏳ ৳${pendingBonus.toFixed(0)} পেন্ডিং`
+                    : `⏳ ৳${pendingBonus.toFixed(0)} Pending`}
+                </span>
+              </button>
+            ) : null}
           </div>
 
           <div className="flex items-baseline space-x-1.5 leading-none">

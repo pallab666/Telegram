@@ -13,6 +13,22 @@ export interface UserData {
   referralsCount: number;
   phone?: string;
   dailyCheckedIn: boolean;
+  lastCheckInTimestamp?: number;
+  checkInStreak?: number;
+  pendingReferralBonus?: number;
+}
+
+export interface ReferredUser {
+  id: string;
+  name: string;
+  username?: string;
+  avatarUrl?: string;
+  joinedDate: string;
+  daysActive: number; // Required: 3 days
+  tasksCompleted: number; // Required: 20 tasks
+  status: 'pending' | 'verified';
+  rewardAmount: number; // ৳100
+  isTransferredToMain: boolean; // whether ৳100 was transferred to user's main wallet
 }
 
 export interface EarnTask {
@@ -20,10 +36,11 @@ export interface EarnTask {
   title: string;
   titleBn: string;
   reward: number;
-  iconType: 'telegram' | 'youtube' | 'facebook' | 'quiz' | 'checkin' | 'survey';
+  iconType: 'telegram' | 'youtube' | 'facebook' | 'quiz' | 'checkin' | 'survey' | 'web' | 'ad';
   category: string;
   completed: boolean;
   link?: string;
+  duration?: number;
 }
 
 export interface VideoClip {
@@ -34,7 +51,8 @@ export interface VideoClip {
   reward: number;
   thumbnailUrl: string;
   videoUrl: string;
-  views: string;
+  views: string | number;
+  viewCount?: number;
   watched: boolean;
 }
 
@@ -54,9 +72,13 @@ export interface WithdrawalRecord {
 }
 
 export interface LeaderboardRank {
+  id?: string;
   rank: number;
   name: string;
+  username?: string;
   avatar: string;
   earnings: number;
   referrals: number;
+  tasksCompleted?: number;
+  isCurrentUser?: boolean;
 }

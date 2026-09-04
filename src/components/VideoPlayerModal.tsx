@@ -1,10 +1,11 @@
 import { motion } from 'motion/react';
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Sparkles, CheckCircle2, Maximize, Minimize } from 'lucide-react';
+import { X, Play, Pause, Sparkles, CheckCircle2, Maximize, Minimize, Eye } from 'lucide-react';
 import { VideoClip } from '../types';
 import { triggerHaptic } from '../utils/telegram';
 import { triggerSmartAd } from '../utils/adManager';
 import { AppPreferences, formatMoney, playAppSound } from '../utils/preferences';
+import { formatViews } from './MoviesClipsSection';
 
 interface VideoPlayerModalProps {
   video: VideoClip | null;
@@ -96,6 +97,11 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     playAppSound('reward');
     setClaimed(true);
     onClaimReward(video.id, video.reward);
+
+    // Auto close modal smoothly after reward feedback and scroll to next unwatched video
+    setTimeout(() => {
+      onClose();
+    }, 1200);
   };
 
   const toggleFullscreen = () => {
@@ -111,7 +117,7 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   const progress = ((video.duration - timeLeft) / video.duration) * 100;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm ">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm">
       <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", duration: 0.5, bounce: 0.3 }} className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800">
@@ -205,7 +211,13 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
         {/* Details & Action */}
         <div className="p-4 space-y-3 bg-slate-50 border-t border-slate-100">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 line-clamp-1">{video.title}</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-slate-900 line-clamp-1 flex-1">{video.title}</h3>
+              <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full flex-shrink-0">
+                <Eye className="w-3 h-3 text-indigo-600" />
+                <span>{formatViews(video.viewCount ?? video.views, isBn)}</span>
+              </div>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {isBn
                 ? 'পুরো ভিডিওটি দেখুন এবং পুরস্কার দাবি করতে অপেক্ষা করুন।'
@@ -214,13 +226,25 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
           </div>
 
           {claimed ? (
-            <div className="w-full py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-center gap-2 text-emerald-700 font-bold text-sm shadow-sm">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span>
-                {isBn
-                  ? `পুরস্কার ${formatMoney(video.reward, currency)} সফলভাবে যোগ হয়েছে!`
-                  : `Reward ${formatMoney(video.reward, currency)} added successfully!`}
-              </span>
+            <div className="space-y-2">
+              <div className="w-full py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-center gap-2 text-emerald-700 font-bold text-xs shadow-sm">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>
+                  {isBn
+                    ? `পুরস্কার ${formatMoney(video.reward, currency)} সফলভাবে যোগ হয়েছে!`
+                    : `Reward ${formatMoney(video.reward, currency)} added successfully!`}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onClose();
+                }}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-98 transition-transform cursor-pointer"
+                id="btn-next-video"
+              >
+                <span>{isBn ? 'পরবর্তী ভিডিও দেখুন 🎬' : 'Watch Next Video 🎬'}</span>
+              </button>
             </div>
           ) : canClaim ? (
             <button
