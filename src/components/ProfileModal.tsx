@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { motion } from "motion/react";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   X,
   Settings,
@@ -8,6 +8,12 @@ import {
   Headphones,
   ChevronDown,
   MoreVertical,
+  Edit3,
+  User,
+  Phone,
+  AtSign,
+  Check,
+  Sparkles,
 } from "lucide-react";
 import { UserData, WithdrawalRecord } from "../types";
 import { triggerHaptic } from "../utils/telegram";
@@ -17,7 +23,8 @@ interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: UserData;
-  onUpdatePhone: (phone: string) => void;
+  onUpdatePhone?: (phone: string) => void;
+  onUpdateUser?: (updated: Partial<UserData>) => void;
   onOpenGuide: () => void;
   onOpenWithdraw?: () => void;
   withdrawals?: WithdrawalRecord[];
@@ -30,12 +37,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
   onClose,
   user,
+  onUpdateUser,
+  onUpdatePhone,
   onOpenWithdraw,
   onlineCount = 1,
   onOpenSettings,
   language = 'bn',
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(user.name);
+  const [editUsername, setEditUsername] = useState(user.username);
+  const [editPhone, setEditPhone] = useState(user.phone || '');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    setEditName(user.name);
+    setEditUsername(user.username);
+    setEditPhone(user.phone || '');
+  }, [user]);
 
   if (!isOpen) return null;
 
@@ -48,6 +68,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     triggerHaptic("success");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerHaptic("success");
+
+    const cleanedName = editName.trim() || 'ইউজার';
+    const cleanedUsername = editUsername.trim().replace(/^@/, '') || 'user_member';
+    const cleanedPhone = editPhone.trim();
+
+    if (onUpdateUser) {
+      onUpdateUser({
+        name: cleanedName,
+        username: cleanedUsername,
+        phone: cleanedPhone,
+      });
+    } else if (onUpdatePhone) {
+      onUpdatePhone(cleanedPhone);
+    }
+
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setSaveSuccess(false);
+      setIsEditing(false);
+    }, 1200);
   };
 
   return (
@@ -124,11 +169,33 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             />
           </div>
 
-          <h2 className="text-[28px] font-black text-white mb-1 leading-none drop-shadow-sm">
-            {user.name}
-          </h2>
-          <div className="text-purple-200 font-bold text-xs mb-3">
-            @{user.username}
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <h2 className="text-[26px] font-black text-white leading-none drop-shadow-sm">
+              {user.name}
+            </h2>
+            <button
+              onClick={() => {
+                triggerHaptic("light");
+                setIsEditing(true);
+              }}
+              className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-yellow-300 transition-transform active:scale-95 border border-white/20 shadow-xs"
+              title={language === 'bn' ? 'নাম পরিবর্তন করুন' : 'Edit Name'}
+            >
+              <Edit3 size={15} />
+            </button>
+          </div>
+
+          <div className="text-purple-200 font-bold text-xs mb-3 flex items-center justify-center gap-1.5">
+            <span>@{user.username}</span>
+            <button
+              onClick={() => {
+                triggerHaptic("light");
+                setIsEditing(true);
+              }}
+              className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/10"
+            >
+              {language === 'bn' ? 'এডিট' : 'Edit'}
+            </button>
           </div>
 
           <div className="bg-white/20 text-white text-[13px] font-bold px-5 py-2 rounded-full inline-flex items-center gap-1.5 mb-5 backdrop-blur-sm border border-white/10 shadow-inner">
@@ -253,6 +320,124 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           <Headphones className="w-6 h-6" strokeWidth={2.5} />
         </button>
       </div>
+
+      {/* Edit Profile Dialog */}
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-slate-100 relative text-left"
+            >
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="absolute right-4 top-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+                  <User size={22} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg leading-tight">
+                    {language === 'bn' ? 'প্রোফাইল সম্পাদন' : 'Edit Profile'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {language === 'bn' ? 'আপনার আসল নাম ও ইউজারনেম সেটিং করুন' : 'Update your real name & username'}
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'আপনার পূর্ণ নাম (Full Name)' : 'Full Name'}
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-3.5 text-slate-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="e.g. Md. Tanvir Hossain"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Username */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'ইউজারনেম (Telegram Username)' : 'Username'}
+                  </label>
+                  <div className="relative">
+                    <AtSign className="absolute left-3.5 top-3.5 text-slate-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      placeholder="e.g. tanvir_dev"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {language === 'bn' ? 'মোবাইল নম্বর (পেমেন্টের জন্য)' : 'Phone Number'}
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3.5 top-3.5 text-slate-400 w-4 h-4" />
+                    <input
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="017xxxxxxxx"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                {saveSuccess ? (
+                  <div className="bg-emerald-500 text-white rounded-2xl py-3 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-md">
+                    <Check size={18} /> {language === 'bn' ? 'প্রোফাইল সংরক্ষিত হয়েছে!' : 'Profile Saved Successfully!'}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-2xl text-sm transition-colors"
+                    >
+                      {language === 'bn' ? 'বাতিল' : 'Cancel'}
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl text-sm transition-colors shadow-md shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles size={16} /> {language === 'bn' ? 'সংরক্ষণ করুন' : 'Save Profile'}
+                    </button>
+                  </div>
+                )}
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

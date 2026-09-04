@@ -297,34 +297,39 @@ export default function App() {
       }).catch(() => {});
     }
 
-    // Check if launched inside Telegram with user info
+    // Check if launched inside Telegram with user info (with polling for SDK readiness)
+    const syncTgUser = () => {
+      const tgUser = getTelegramUser();
+      if (tgUser && tgUser.id) {
+        registerTelegramUserOnServer(tgUser);
+        setUser((prev) => {
+          const fullName = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || 'মেম্বার ইউজার';
+          const currentHasTelegramId = prev.referralCode && prev.referralCode.includes(String(tgUser.id));
+          const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829' && currentHasTelegramId)
+            ? prev.referralCode
+            : generateUniqueReferralCode({ telegramId: tgUser.id, username: tgUser.username, name: fullName });
+
+          const dynamicAvatar = tgUser.photo_url || ((!prev.avatarUrl || prev.avatarUrl.includes('photo-1534528741775-53994a69daeb') || prev.avatarUrl.includes('photo-1535713875002-d1d0cf377fde')) ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}` : prev.avatarUrl);
+          const cleanUsername = tgUser.username || (prev.username && prev.username !== 'tanvir_dev' && prev.username !== 'user_member' ? prev.username : `user_${tgUser.id}`);
+
+          return {
+            ...prev,
+            id: `tg_${tgUser.id}`,
+            name: fullName,
+            username: cleanUsername,
+            telegramId: tgUser.id,
+            avatarUrl: dynamicAvatar,
+            referralCode: newRefCode,
+          };
+        });
+      }
+    };
+
+    syncTgUser();
+    const tgInterval = setInterval(syncTgUser, 500);
+    const tgTimeout = setTimeout(() => clearInterval(tgInterval), 5000);
+
     const tgUser = getTelegramUser();
-    if (tgUser) {
-      registerTelegramUserOnServer(tgUser);
-      setUser((prev) => {
-        const fullName = `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() || 'ইউজার';
-        const currentHasTelegramId = prev.referralCode && prev.referralCode.includes(String(tgUser.id));
-        const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829' && currentHasTelegramId)
-          ? prev.referralCode
-          : generateUniqueReferralCode({ telegramId: tgUser.id, username: tgUser.username, name: fullName });
-
-        // Clean user avatar (if photo_url exists use it, otherwise generate personalized avatar for user)
-        const prevIsFemaleDummy = !prev.avatarUrl || prev.avatarUrl.includes('photo-1534528741775-53994a69daeb');
-        const dynamicAvatar = tgUser.photo_url || (prevIsFemaleDummy ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}` : prev.avatarUrl);
-
-        const cleanUsername = tgUser.username || (prev.username && prev.username !== 'tanvir_dev' && prev.username !== 'user_member' ? prev.username : `user_${tgUser.id}`);
-
-        return {
-          ...prev,
-          id: `tg_${tgUser.id}`,
-          name: fullName,
-          username: cleanUsername,
-          telegramId: tgUser.id,
-          avatarUrl: dynamicAvatar,
-          referralCode: newRefCode,
-        };
-      });
-    }
 
     // Real-time online users presence tracking
     const cleanupPresence = initPresenceTracker({
@@ -340,6 +345,8 @@ export default function App() {
     });
 
     return () => {
+      clearInterval(tgInterval);
+      clearTimeout(tgTimeout);
       cleanupPresence();
     };
   }, []);
@@ -1061,6 +1068,7 @@ export default function App() {
           }}
           user={user}
           withdrawals={withdrawals}
+          onUpdateUser={(updated) => setUser((prev) => ({ ...prev, ...updated }))}
           onUpdatePhone={(phone) => setUser((prev) => ({ ...prev, phone }))}
           onOpenGuide={() => setIsGuideOpen(true)}
           onOpenWithdraw={() => setIsWithdrawOpen(true)}
