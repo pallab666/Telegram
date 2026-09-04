@@ -30,6 +30,7 @@ import {
   markInitialSetupCompleted,
 } from './utils/preferences';
 import { initPresenceTracker } from './utils/presence';
+import { generateUniqueReferralCode } from './utils/userUtils';
 import { Sparkles, Gift } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -45,8 +46,15 @@ export default function App() {
           parsed.referralsCount === 2 && !parsed.hasRealReferrals
             ? 0
             : parsed.referralsCount ?? 0;
+
+        // Ensure user has their own unique referral code
+        const refCode = (parsed.referralCode && parsed.referralCode !== 'SMART8829')
+          ? parsed.referralCode
+          : generateUniqueReferralCode({ telegramId: parsed.telegramId, username: parsed.username, name: parsed.name });
+
         return {
           ...parsed,
+          referralCode: refCode,
           referralsCount: cleanedReferrals,
           minWithdraw: adConfig.minWithdraw || parsed.minWithdraw || 1000,
         };
@@ -54,8 +62,10 @@ export default function App() {
         // fallback
       }
     }
+    const defaultRefCode = generateUniqueReferralCode({ name: INITIAL_USER.name });
     return {
       ...INITIAL_USER,
+      referralCode: defaultRefCode,
       referralsCount: 0,
       minWithdraw: adConfig.minWithdraw || 1000,
     };
@@ -271,13 +281,21 @@ export default function App() {
     const tgUser = getTelegramUser();
     if (tgUser) {
       registerTelegramUserOnServer(tgUser);
-      setUser((prev) => ({
-        ...prev,
-        name: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
-        username: tgUser.username || prev.username,
-        telegramId: tgUser.id,
-        avatarUrl: tgUser.photo_url || prev.avatarUrl,
-      }));
+      setUser((prev) => {
+        const fullName = `${tgUser.first_name} ${tgUser.last_name || ''}`.trim();
+        const newRefCode = (prev.referralCode && prev.referralCode !== 'SMART8829')
+          ? prev.referralCode
+          : generateUniqueReferralCode({ telegramId: tgUser.id, username: tgUser.username, name: fullName });
+
+        return {
+          ...prev,
+          name: fullName,
+          username: tgUser.username || prev.username,
+          telegramId: tgUser.id,
+          avatarUrl: tgUser.photo_url || prev.avatarUrl,
+          referralCode: newRefCode,
+        };
+      });
     }
 
     // Real-time online users presence tracking
