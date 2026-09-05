@@ -1,5 +1,5 @@
 import React from "react";
-import { Settings, Lock } from "lucide-react";
+import { Settings, Lock, Bell } from "lucide-react";
 import { UserData } from "../types";
 import { triggerHaptic } from "../utils/telegram";
 
@@ -12,6 +12,8 @@ interface TelegramHeaderProps {
   onOpenAdmin?: () => void;
   onOpenGuide: () => void;
   onOpenProfile: () => void;
+  onOpenNotifications?: () => void;
+  unreadNotificationsCount?: number;
   pendingWithdrawalsCount?: number;
 }
 
@@ -24,6 +26,8 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
   onOpenAdmin,
   onOpenGuide,
   onOpenProfile,
+  onOpenNotifications,
+  unreadNotificationsCount = 0,
   pendingWithdrawalsCount = 0,
 }) => {
   return (
@@ -77,8 +81,27 @@ export const TelegramHeader: React.FC<TelegramHeaderProps> = ({
           </div>
         </div>
 
-        {/* Action Controls: Settings button */}
+        {/* Action Controls: Notifications & Settings buttons */}
         <div className="flex items-center gap-1.5">
+          {onOpenNotifications && (
+            <button
+              onClick={() => {
+                triggerHaptic("medium");
+                onOpenNotifications();
+              }}
+              className="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-sm transition-all active:scale-90 cursor-pointer relative"
+              id="btn-notifications-bell"
+              aria-label="Notifications"
+            >
+              <Bell className="w-4 h-4 text-purple-600" />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[9px] font-black flex items-center justify-center text-white border-2 border-white animate-pulse">
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <button
             onClick={() => {
               triggerHaptic("medium");

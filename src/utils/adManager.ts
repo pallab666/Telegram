@@ -14,6 +14,11 @@ export interface AdminAdConfig {
   adsterraImpressions: number;
   monetagImpressions: number;
   lastAdIndex: number;
+  // High CPM & Retention configuration
+  adWatchDuration: number; // Duration in seconds user must watch/stay on ad (e.g. 15, 20, 30, 45, 60s)
+  enableAttentionCheck: boolean; // Anti-bot / Human verification check after ad completes to guarantee high advertiser engagement
+  webVisitMinSeconds: number; // Minimum dwell time on sponsor website tasks to prevent bounce penalties
+  highCpmTierEnabled: boolean; // Flag to activate high-CPM visual indicators and dwell-time enforcement
 }
 
 export const DEFAULT_AD_CONFIG: AdminAdConfig = {
@@ -30,6 +35,10 @@ export const DEFAULT_AD_CONFIG: AdminAdConfig = {
   adsterraImpressions: 0,
   monetagImpressions: 0,
   lastAdIndex: 0,
+  adWatchDuration: 30, // 30 seconds ensures top-tier CPM from Monetag and Adsterra
+  enableAttentionCheck: true,
+  webVisitMinSeconds: 25,
+  highCpmTierEnabled: true,
 };
 
 const STORAGE_KEY = 'smart_earning_ad_config';
@@ -47,6 +56,10 @@ export function getAdConfig(): AdminAdConfig {
         minWithdraw: parsed.minWithdraw === 50 ? 1000 : (parsed.minWithdraw || 1000),
         adsterraUrl1: parsed.adsterraUrl1 || parsed.adsterraUrl || DEFAULT_AD_CONFIG.adsterraUrl1,
         monetagUrl1: parsed.monetagUrl1 || parsed.monetagUrl || DEFAULT_AD_CONFIG.monetagUrl1,
+        adWatchDuration: parsed.adWatchDuration !== undefined ? Number(parsed.adWatchDuration) : DEFAULT_AD_CONFIG.adWatchDuration,
+        enableAttentionCheck: parsed.enableAttentionCheck !== undefined ? Boolean(parsed.enableAttentionCheck) : DEFAULT_AD_CONFIG.enableAttentionCheck,
+        webVisitMinSeconds: parsed.webVisitMinSeconds ? Number(parsed.webVisitMinSeconds) : DEFAULT_AD_CONFIG.webVisitMinSeconds,
+        highCpmTierEnabled: parsed.highCpmTierEnabled !== undefined ? Boolean(parsed.highCpmTierEnabled) : true,
       };
     }
   } catch (e) {

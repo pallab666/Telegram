@@ -320,7 +320,7 @@ async function startServer() {
   app.post("/api/leaderboard/sync", async (req, res) => {
     let body = req.body;
     if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
-    const { id, name, username, avatar, earnings, referrals, tasksCompleted } = body || {};
+    const { id, name, username, avatar, avatarUrl, earnings, balance, totalEarned, referrals, referralsCount, tasksCompleted, referralCode } = body || {};
     if (!id) return res.status(400).json({ success: false });
 
     const leaderboard = await getStoredData('leaderboard', []);
@@ -330,10 +330,12 @@ async function startServer() {
       id,
       name: name || "Unknown",
       username: username || "",
-      avatar: avatar || "",
-      earnings: Number(earnings) || 0,
-      referrals: Number(referrals) || 0,
+      avatarUrl: avatarUrl || avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + encodeURIComponent(name || "User"),
+      balance: Number(balance) || Number(earnings) || 0,
+      totalEarned: Number(totalEarned) || Number(balance) || Number(earnings) || 0,
+      referralsCount: Number(referralsCount) || Number(referrals) || 0,
       tasksCompleted: Number(tasksCompleted) || 0,
+      referralCode: referralCode ? String(referralCode).trim().toUpperCase() : "",
       lastActive: Date.now()
     };
 
@@ -349,17 +351,46 @@ async function startServer() {
 
   app.get("/api/leaderboard", async (req, res) => {
     const { category, period, userId } = req.query;
-    const leaderboard = await getStoredData('leaderboard', []);
+    let leaderboard = await getStoredData('leaderboard', []);
+    const referralsStore = await getStoredData('referrals', {});
+
+    // Ensure default initial top referrers if database is fresh
+    if (!Array.isArray(leaderboard) || leaderboard.length === 0) {
+      leaderboard = [
+        { id: "top_ref_1", name: "মেহেদী হাসান", username: "@mehedi_pro", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mehedi", balance: 4850, totalEarned: 4850, referralsCount: 42, tasksCompleted: 68, referralCode: "MEHEDI42" },
+        { id: "top_ref_2", name: "তানভীর আহমেদ", username: "@tanvir_bd", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tanvir", balance: 3920, totalEarned: 3920, referralsCount: 31, tasksCompleted: 54, referralCode: "TANVIR31" },
+        { id: "top_ref_3", name: "সুমাইয়া আক্তার", username: "@sumaiya_a", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sumaiya", balance: 2950, totalEarned: 2950, referralsCount: 23, tasksCompleted: 45, referralCode: "SUMAIYA23" },
+        { id: "top_ref_4", name: "রাকিব খান", username: "@rakib_boss", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rakib", balance: 2100, totalEarned: 2100, referralsCount: 18, tasksCompleted: 39, referralCode: "RAKIB18" },
+        { id: "top_ref_5", name: "আরিফ হোসেন", username: "@arif_earn", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Arif", balance: 1650, totalEarned: 1650, referralsCount: 14, tasksCompleted: 28, referralCode: "ARIF14" },
+      ];
+      await saveStoredData('leaderboard', leaderboard);
+    }
     
+    // Calculate total successful referrals dynamically from real referralsStore
+    const enrichedLeaderboard = leaderboard.map((u: any) => {
+      let realRefsCount = u.referralsCount || 0;
+      if (u.referralCode && referralsStore[u.referralCode]) {
+        const storeCount = Array.isArray(referralsStore[u.referralCode]) ? referralsStore[u.referralCode].length : 0;
+        realRefsCount = Math.max(realRefsCount, storeCount);
+      }
+      return {
+        ...u,
+        referralsCount: realRefsCount,
+        referrals: realRefsCount,
+        balance: u.balance || u.earnings || 0,
+        earnings: u.balance || u.earnings || 0,
+      };
+    });
+
     // Sort based on category
-    let sorted = [...leaderboard];
+    let sorted = [...enrichedLeaderboard];
     if (category === "earnings") {
-      sorted.sort((a, b) => (b.earnings || 0) - (a.earnings || 0));
+      sorted.sort((a, b) => (b.balance || 0) - (a.balance || 0));
     } else if (category === "unlocks") {
       sorted.sort((a, b) => (b.tasksCompleted || 0) - (a.tasksCompleted || 0));
     } else {
-      // Default to Top Refs
-      sorted.sort((a, b) => (b.referrals || 0) - (a.referrals || 0));
+      // Default to Top Referrers
+      sorted.sort((a, b) => (b.referralsCount || 0) - (a.referralsCount || 0));
     }
 
     // Create rankings list
@@ -430,6 +461,206 @@ async function startServer() {
     };
     await saveStoredData('telegramUsers', users);
     res.json({ success: true, registeredCount: Object.keys(users).length });
+  });
+
+  // Admin list of registered users for messaging
+  app.get("/api/admin/users", async (req, res) => {
+    const tgUsers = await getStoredData('telegramUsers', {});
+    const leaderboard = await getStoredData('leaderboard', []);
+    const userMap: Record<string, any> = {};
+
+    // Populate from leaderboard
+    if (Array.isArray(leaderboard)) {
+      leaderboard.forEach((u: any) => {
+        if (u && u.id) {
+          userMap[u.id] = {
+            id: u.id,
+            name: u.name || "User",
+            username: u.username || "",
+            chatId: u.telegramId || u.chatId || (u.id.startsWith("tg_") ? u.id.replace("tg_", "") : ""),
+            balance: u.balance || u.earnings || 0,
+            referralsCount: u.referralsCount || 0,
+            lastActive: u.lastActive || Date.now(),
+          };
+        }
+      });
+    }
+
+    // Merge from telegramUsers
+    Object.values(tgUsers).forEach((tu: any) => {
+      if (tu && tu.chatId) {
+        const id = `tg_${tu.chatId}`;
+        userMap[id] = {
+          ...(userMap[id] || {}),
+          id: id,
+          name: tu.firstName || userMap[id]?.name || "User",
+          username: tu.username ? `@${tu.username.replace('@', '')}` : userMap[id]?.username || "",
+          chatId: String(tu.chatId),
+          balance: userMap[id]?.balance || 0,
+          registeredAt: tu.registeredAt || Date.now(),
+        };
+      }
+    });
+
+    const list = Object.values(userMap);
+    res.json({ success: true, users: list });
+  });
+
+  // Direct Message Endpoint (Admin to User via Telegram Bot & In-App Notification)
+  app.post("/api/admin/send-user-message", async (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+    const { targetUserId, telegramChatId, title, message, sendTelegram, sendInApp, appLink } = body || {};
+
+    if (!title || !message) {
+      return res.status(400).json({ success: false, error: "Title and message are required" });
+    }
+
+    const sysSettings = (await getStoredData('systemSettings', null)) || {};
+    const botToken = sysSettings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN;
+    const defaultLink = appLink || sysSettings.telegramChannelUrl || "https://t.me";
+
+    let telegramSent = false;
+    let telegramSentCount = 0;
+    let inAppSent = false;
+    let errorDetails = "";
+
+    // 1. Send via Telegram Bot Direct Message
+    if (sendTelegram) {
+      if (!botToken) {
+        errorDetails += "Telegram Bot Token is missing in System Settings. ";
+      } else {
+        const tgUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        const htmlText = `<b>📩 ${title}</b>\n\n${message}`;
+        const replyMarkup = {
+          inline_keyboard: [[{ text: "🚀 অ্যাপ খুলুন (Open App)", url: defaultLink }]]
+        };
+
+        if (targetUserId === "all") {
+          // Send to all registered telegram users
+          const tgUsers = await getStoredData('telegramUsers', {});
+          for (const u of Object.values(tgUsers) as any[]) {
+            if (u.chatId) {
+              try {
+                const tgRes = await fetch(tgUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ chat_id: u.chatId, text: htmlText, parse_mode: "HTML", reply_markup: replyMarkup }),
+                });
+                if (tgRes.ok) telegramSentCount++;
+              } catch (e) {}
+            }
+          }
+          if (telegramSentCount > 0) telegramSent = true;
+        } else {
+          // Target specific user or custom chatId
+          let activeChatId = telegramChatId;
+          if (!activeChatId && targetUserId) {
+            if (targetUserId.startsWith("tg_")) activeChatId = targetUserId.replace("tg_", "");
+            else {
+              const tgUsers = await getStoredData('telegramUsers', {});
+              const match = Object.values(tgUsers).find((tu: any) => tu.id === targetUserId || tu.chatId === targetUserId);
+              if (match) activeChatId = (match as any).chatId;
+            }
+          }
+
+          if (activeChatId) {
+            try {
+              const tgRes = await fetch(tgUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: activeChatId, text: htmlText, parse_mode: "HTML", reply_markup: replyMarkup }),
+              });
+              const resData = await tgRes.json();
+              if (tgRes.ok && resData.ok) {
+                telegramSent = true;
+                telegramSentCount = 1;
+              } else {
+                errorDetails += `Telegram API Error: ${resData.description || 'Failed to send'}. `;
+              }
+            } catch (err: any) {
+              errorDetails += `Telegram Connection Error: ${err.message || 'Error'}. `;
+            }
+          } else {
+            errorDetails += "Target Telegram Chat ID could not be determined. ";
+          }
+        }
+      }
+    }
+
+    // 2. Save as In-App Notification
+    if (sendInApp) {
+      const userNotifications = await getStoredData('userNotifications', []);
+      const newNotif = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        targetUserId: targetUserId || "all",
+        telegramChatId: telegramChatId || "",
+        title,
+        message,
+        appLink: defaultLink,
+        createdAt: Date.now(),
+        read: false,
+      };
+
+      userNotifications.unshift(newNotif);
+      // Keep last 100 notifications
+      if (userNotifications.length > 100) userNotifications.pop();
+      await saveStoredData('userNotifications', userNotifications);
+      inAppSent = true;
+    }
+
+    res.json({
+      success: true,
+      telegramSent,
+      telegramSentCount,
+      inAppSent,
+      errorDetails: errorDetails.trim(),
+      message: `Message dispatched successfully! (Telegram: ${telegramSentCount}, In-App: ${inAppSent ? 'Saved' : 'Off'})`
+    });
+  });
+
+  // User In-App Notifications API
+  app.get("/api/user-notifications", async (req, res) => {
+    const { userId, chatId } = req.query;
+    const allNotifs = await getStoredData('userNotifications', []);
+
+    const userNotifs = allNotifs.filter((n: any) => {
+      if (n.targetUserId === "all") return true;
+      if (userId && (n.targetUserId === String(userId) || n.targetUserId === `tg_${userId}`)) return true;
+      if (chatId && (n.telegramChatId === String(chatId) || n.targetUserId === String(chatId) || n.targetUserId === `tg_${chatId}`)) return true;
+      return false;
+    });
+
+    res.json({ success: true, notifications: userNotifs });
+  });
+
+  app.post("/api/user-notifications/mark-read", async (req, res) => {
+    let body = req.body;
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+    const { notificationId, userId } = body || {};
+
+    const allNotifs = await getStoredData('userNotifications', []);
+    let updated = false;
+
+    allNotifs.forEach((n: any) => {
+      if (notificationId) {
+        if (n.id === notificationId) {
+          n.read = true;
+          updated = true;
+        }
+      } else if (userId) {
+        if (n.targetUserId === "all" || n.targetUserId === String(userId) || n.targetUserId === `tg_${userId}`) {
+          n.read = true;
+          updated = true;
+        }
+      }
+    });
+
+    if (updated) {
+      await saveStoredData('userNotifications', allNotifs);
+    }
+
+    res.json({ success: true });
   });
 
   // Notifications

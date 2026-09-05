@@ -156,7 +156,7 @@ export const DailyCheckInCard: React.FC<DailyCheckInCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-[2rem] p-4.5 mb-4 shadow-sm border border-purple-200/80 relative overflow-hidden">
+    <div id="daily-checkin-card" className="bg-white rounded-[2rem] p-4.5 mb-4 shadow-sm border border-purple-200/80 relative overflow-hidden">
       {/* Decorative gradient blur */}
       <div className="absolute top-0 right-0 w-36 h-36 bg-gradient-to-br from-amber-400/15 via-purple-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
 

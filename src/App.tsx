@@ -18,6 +18,7 @@ import { ScratchCardModal } from './components/ScratchCardModal';
 import { InitialSetupModal } from './components/InitialSetupModal';
 import { LiveWithdrawalTicker } from './components/LiveWithdrawalTicker';
 import { BroadcastAnnouncementModal } from './components/BroadcastAnnouncementModal';
+import { NotificationsModal, UserNotificationItem } from './components/NotificationsModal';
 import { INITIAL_USER, INITIAL_TASKS, INITIAL_VIDEOS, INITIAL_LEADERBOARD } from './data/mockData';
 import { UserData, EarnTask, VideoClip, WithdrawalRecord, ReferredUser } from './types';
 import { initTelegramApp, getTelegramUser, triggerHaptic, registerTelegramUserOnServer } from './utils/telegram';
@@ -33,6 +34,7 @@ import { initPresenceTracker } from './utils/presence';
 import { generateUniqueReferralCode } from './utils/userUtils';
 import { Sparkles, Gift } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { recordDailyMissionAction } from './utils/dailyMissions';
 
 export default function App() {
   const [user, setUser] = useState<UserData>(() => {
@@ -230,8 +232,48 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isScratchOpen, setIsScratchOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [userNotifications, setUserNotifications] = useState<UserNotificationItem[]>([]);
   const [activeVideo, setActiveVideo] = useState<VideoClip | null>(null);
   const [highlightedVideoId, setHighlightedVideoId] = useState<string | null>(null);
+
+  // User Notifications Polling
+  const fetchUserNotifications = async () => {
+    try {
+      const tgUser = getTelegramUser();
+      const uId = tgUser?.id ? String(tgUser.id) : user.telegramId ? String(user.telegramId) : user.id;
+      const res = await fetch(`/api/user-notifications?userId=${encodeURIComponent(uId)}&chatId=${encodeURIComponent(uId)}&t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.notifications)) {
+          setUserNotifications(data.notifications);
+        }
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchUserNotifications();
+    const interval = setInterval(fetchUserNotifications, 10000);
+    return () => clearInterval(interval);
+  }, [user.id, user.telegramId]);
+
+  const handleMarkNotificationsRead = async (notifId?: string) => {
+    const tgUser = getTelegramUser();
+    const uId = tgUser?.id ? String(tgUser.id) : user.telegramId ? String(user.telegramId) : user.id;
+
+    setUserNotifications((prev) =>
+      prev.map((n) => (notifId ? (n.id === notifId ? { ...n, read: true } : n) : { ...n, read: true }))
+    );
+
+    try {
+      await fetch('/api/user-notifications/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: notifId, userId: uId }),
+      });
+    } catch (e) {}
+  };
 
   // App preferences (Language & Currency) + Initial Setup Flow
   const [preferences, setPreferences] = useState<AppPreferences>(() => getAppPreferences());
@@ -543,6 +585,7 @@ export default function App() {
       prev.map((t) => (t.id === 'task_checkin' ? { ...t, completed: true } : t))
     );
 
+    recordDailyMissionAction('checkin', 1);
     triggerCelebration();
     showToast(
       preferences.language === 'bn'
@@ -557,6 +600,7 @@ export default function App() {
       balance: Math.round((prev.balance + amount) * 100) / 100,
       totalEarned: Math.round((prev.totalEarned + amount) * 100) / 100,
     }));
+    recordDailyMissionAction('spin', 1);
     triggerCelebration();
     showToast(
       preferences.language === 'bn'
@@ -688,6 +732,7 @@ export default function App() {
       fetch(`/api/videos/${videoId}/view`, { method: 'POST' }).catch(() => {});
     } catch (e) {}
 
+    recordDailyMissionAction('video', 1);
     triggerCelebration();
     showToast(
       preferences.language === 'bn'
@@ -711,6 +756,7 @@ export default function App() {
       prev.map((t) => (t.id === taskId ? { ...t, completed: true } : t))
     );
 
+    recordDailyMissionAction('task', 1);
     triggerCelebration();
     showToast(`✅ টাস্ক সম্পন্ন! +৳${reward.toFixed(2)} BDT যোগ হয়েছে`);
   };
@@ -722,11 +768,26 @@ export default function App() {
       totalEarned: Math.round((prev.totalEarned + amount) * 100) / 100,
     }));
 
+    recordDailyMissionAction('scratch', 1);
     triggerCelebration();
     showToast(
       preferences.language === 'bn'
         ? `🎁 স্ক্র্যাচ কার্ড থেকে +৳${amount.toFixed(2)} BDT মূল ব্যালেন্সে যোগ হয়েছে!`
         : `🎁 Scratch Card reward +৳${amount.toFixed(2)} BDT added to main balance!`
+    );
+  };
+
+  const handleClaimMissionReward = (amount: number, reason: string) => {
+    setUser((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + amount) * 100) / 100,
+      totalEarned: Math.round((prev.totalEarned + amount) * 100) / 100,
+    }));
+    triggerCelebration();
+    showToast(
+      preferences.language === 'bn'
+        ? `🎉 ${reason}! +৳${amount.toFixed(2)} BDT মূল ব্যালেন্সে যোগ হয়েছে!`
+        : `🎉 ${reason}! +৳${amount.toFixed(2)} BDT added to main balance!`
     );
   };
 
@@ -928,6 +989,8 @@ export default function App() {
           onOpenAdmin={() => setIsAdminOpen(true)}
           onOpenGuide={() => setIsGuideOpen(true)}
           onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
+          unreadNotificationsCount={userNotifications.filter((n) => !n.read).length}
           pendingWithdrawalsCount={
             withdrawals.filter((w) => w.status === 'Pending').length
           }
@@ -1046,6 +1109,9 @@ export default function App() {
           preferences={preferences}
           onClaimDailyCheckIn={handleClaimDailyCheckIn}
           onOpenScratch={() => setIsScratchOpen(true)}
+          onClaimDailyMissionReward={handleClaimMissionReward}
+          videos={videos}
+          referrals={referrals}
         />
 
         <ReferModal
@@ -1097,6 +1163,8 @@ export default function App() {
             if (activeTab === 'profile') setActiveTab('home');
           }}
           user={user}
+          tasks={tasks}
+          videos={videos}
           withdrawals={withdrawals}
           onUpdateUser={(updated) => setUser((prev) => ({ ...prev, ...updated }))}
           onUpdatePhone={(phone) => setUser((prev) => ({ ...prev, phone }))}
@@ -1191,6 +1259,15 @@ export default function App() {
           onClaimReward={handleScratchReward}
           preferences={preferences}
           onlineCount={onlineCount}
+        />
+
+        {/* User Notifications Modal */}
+        <NotificationsModal
+          isOpen={isNotificationsOpen}
+          onClose={() => setIsNotificationsOpen(false)}
+          notifications={userNotifications}
+          onMarkRead={handleMarkNotificationsRead}
+          language={preferences.language}
         />
 
         {/* Global Admin Broadcast Announcement Modal */}

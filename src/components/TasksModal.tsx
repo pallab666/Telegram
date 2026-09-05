@@ -21,17 +21,82 @@ import {
   ExternalLink,
   Layers,
   Gift,
+  Target,
+  Trophy,
+  ChevronRight,
+  ShieldCheck,
 } from "lucide-react";
-import { EarnTask, UserData } from "../types";
+import { EarnTask, UserData, VideoClip, ReferredUser } from "../types";
 import { triggerHaptic, openAdLink } from "../utils/telegram";
-import { triggerSmartAd } from "../utils/adManager";
+import { triggerSmartAd, getAdConfig } from "../utils/adManager";
 import { AppPreferences } from "../utils/preferences";
 import {
   DailyCheckInCard,
   CHECKIN_COOLDOWN_MS,
   CHECKIN_STORAGE_KEY,
 } from "./DailyCheckInCard";
+import { DailyMissionsSection } from "./DailyMissionsSection";
+import {
+  DAILY_MISSIONS_LIST,
+  DailyMission,
+  loadDailyMissionsState,
+} from "../utils/dailyMissions";
 import confetti from "canvas-confetti";
+
+interface AttentionQuestion {
+  id: string;
+  promptBn: string;
+  promptEn: string;
+  targetEmoji: string;
+  options: { id: string; labelBn: string; labelEn: string; emoji: string; isCorrect: boolean }[];
+}
+
+const HIGH_CPM_ATTENTION_QUESTIONS: AttentionQuestion[] = [
+  {
+    id: "att_star",
+    promptBn: "মানবীয় উপস্থিতি নিশ্চিত করুন: নিচের ছবিতে 'তারা' (⭐) নির্বাচন করুন:",
+    promptEn: "Confirm Human Presence: Select the 'Star' (⭐):",
+    targetEmoji: "⭐",
+    options: [
+      { id: "o1", labelBn: "হীরা 💎", labelEn: "Diamond 💎", emoji: "💎", isCorrect: false },
+      { id: "o2", labelBn: "তারা ⭐", labelEn: "Star ⭐", emoji: "⭐", isCorrect: true },
+      { id: "o3", labelBn: "ঘণ্টা 🔔", labelEn: "Bell 🔔", emoji: "🔔", isCorrect: false },
+    ],
+  },
+  {
+    id: "att_gift",
+    promptBn: "বিজ্ঞাপন ভেরিফিকেশন: রিওয়ার্ড আনলক করতে 'উপহার বক্স' (🎁) ট্যাপ করুন:",
+    promptEn: "Ad Verification: Tap the 'Gift Box' (🎁) to unlock reward:",
+    targetEmoji: "🎁",
+    options: [
+      { id: "o1", labelBn: "উপহার 🎁", labelEn: "Gift 🎁", emoji: "🎁", isCorrect: true },
+      { id: "o2", labelBn: "আগুন 🔥", labelEn: "Fire 🔥", emoji: "🔥", isCorrect: false },
+      { id: "o3", labelBn: "রকেট 🚀", labelEn: "Rocket 🚀", emoji: "🚀", isCorrect: false },
+    ],
+  },
+  {
+    id: "att_check",
+    promptBn: "বট রোধ যাচাই: নিচের সঠিক 'টিক চিহ্ন' (✅) বাটনে চাপুন:",
+    promptEn: "Anti-bot Check: Tap the correct 'Checkmark' (✅):",
+    targetEmoji: "✅",
+    options: [
+      { id: "o1", labelBn: "ক্রস ❌", labelEn: "Cross ❌", emoji: "❌", isCorrect: false },
+      { id: "o2", labelBn: "হৃদয় ❤️", labelEn: "Heart ❤️", emoji: "❤️", isCorrect: false },
+      { id: "o3", labelBn: "সঠিক ✅", labelEn: "Check ✅", emoji: "✅", isCorrect: true },
+    ],
+  },
+  {
+    id: "att_green",
+    promptBn: "হাই CPM কোয়ালিটি চেক: নিচের 'সবুজ' চিহ্ন (🟢) স্পর্শ করুন:",
+    promptEn: "High CPM Quality Check: Tap the 'Green' circle (🟢):",
+    targetEmoji: "🟢",
+    options: [
+      { id: "o1", labelBn: "নীল 🔵", labelEn: "Blue 🔵", emoji: "🔵", isCorrect: false },
+      { id: "o2", labelBn: "সবুজ 🟢", labelEn: "Green 🟢", emoji: "🟢", isCorrect: true },
+      { id: "o3", labelBn: "হলুদ 🟡", labelEn: "Yellow 🟡", emoji: "🟡", isCorrect: false },
+    ],
+  },
+];
 
 interface TasksModalProps {
   isOpen: boolean;
@@ -48,12 +113,15 @@ interface TasksModalProps {
   preferences?: AppPreferences;
   onClaimDailyCheckIn?: (reward: number, streak: number, timestamp: number) => void;
   onOpenScratch?: () => void;
+  onClaimDailyMissionReward?: (amount: number, reason: string) => void;
+  videos?: VideoClip[];
+  referrals?: ReferredUser[];
 }
 
 const MAX_DAILY_ADS = 15;
 const AD_REWARD_AMOUNT = 1.50;
 const AD_COOLDOWN_SECONDS = 20;
-const AD_WATCH_DURATION = 10;
+const AD_WATCH_DURATION = 30;
 
 interface QuizQuestion {
   id: string;
@@ -127,8 +195,61 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   preferences,
   onClaimDailyCheckIn,
   onOpenScratch,
+  onClaimDailyMissionReward,
+  videos,
+  referrals,
 }) => {
-  const [activeTab, setActiveTab] = useState<"all" | "visit" | "special">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "missions" | "visit" | "special">("missions");
+
+  // Computed external activity counts for daily missions
+  const externalCounts = {
+    video: videos ? videos.filter((v) => v.watched).length : 0,
+    refer: referrals ? referrals.length : (user?.referralsCount || 0),
+    task: tasks ? tasks.filter((t) => t.completed && t.id !== 'task_checkin').length : 0,
+    checkin: dailyCheckedIn || user?.dailyCheckedIn ? 1 : 0,
+  };
+
+  const handleMissionRewardClaimed = (amount: number, reason: string) => {
+    if (onClaimDailyMissionReward) {
+      onClaimDailyMissionReward(amount, reason);
+    } else {
+      onCompleteTask(`mission_${Date.now()}`, amount);
+    }
+    showInnerToast(
+      language === 'bn'
+        ? `🎉 ${reason} +৳${amount.toFixed(2)} যোগ হয়েছে!`
+        : `🎉 ${reason} +৳${amount.toFixed(2)} credited!`
+    );
+  };
+
+  const handleMissionNavigate = (category: DailyMission['category']) => {
+    if (category === 'refer') {
+      if (onNavigate) onNavigate('refer');
+    } else if (category === 'video') {
+      onClose();
+      setTimeout(() => {
+        const el = document.getElementById('section-movies-clips');
+        el?.scrollIntoView({ behavior: 'smooth' });
+      }, 250);
+    } else if (category === 'task') {
+      setActiveTab('all');
+    } else if (category === 'spin') {
+      onClose();
+      setTimeout(() => {
+        const el = document.getElementById('section-daily-spin');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 250);
+    } else if (category === 'scratch') {
+      if (onOpenScratch) onOpenScratch();
+    } else if (category === 'checkin') {
+      const el = document.getElementById('daily-checkin-card');
+      el?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Daily ad state management
   const todayKey = `smart_earning_daily_ads_${new Date().toISOString().slice(0, 10)}`;
@@ -144,7 +265,11 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   const [adCooldown, setAdCooldown] = useState<number>(0);
   const [isWatchingAd, setIsWatchingAd] = useState(false);
   const [adProgressTimer, setAdProgressTimer] = useState<number>(AD_WATCH_DURATION);
+  const [adWatchDurationTotal, setAdWatchDurationTotal] = useState<number>(AD_WATCH_DURATION);
   const [canClaimAdReward, setCanClaimAdReward] = useState(false);
+  const [attentionQuestion, setAttentionQuestion] = useState<AttentionQuestion | null>(null);
+  const [attentionCheckPassed, setAttentionCheckPassed] = useState(false);
+  const [attentionErrorMsg, setAttentionErrorMsg] = useState<string | null>(null);
 
   // Task verification countdowns: taskId -> remaining seconds & progress total
   const [verifyingTasks, setVerifyingTasks] = useState<
@@ -178,7 +303,10 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   useEffect(() => {
     if (!isWatchingAd) return;
     if (adProgressTimer <= 0) {
-      setCanClaimAdReward(true);
+      const config = getAdConfig();
+      if (!config.enableAttentionCheck) {
+        setCanClaimAdReward(true);
+      }
       return;
     }
     const interval = setInterval(() => {
@@ -242,13 +370,51 @@ export const TasksModal: React.FC<TasksModalProps> = ({
 
     triggerHaptic("medium");
 
+    const adConfig = getAdConfig();
+    const duration = Math.max(5, Number(adConfig.adWatchDuration) || 30);
+
+    // Pick a random attention question & shuffle options
+    const randomQ =
+      HIGH_CPM_ATTENTION_QUESTIONS[
+        Math.floor(Math.random() * HIGH_CPM_ATTENTION_QUESTIONS.length)
+      ];
+    const shuffledOptions = [...randomQ.options].sort(() => Math.random() - 0.5);
+    setAttentionQuestion({ ...randomQ, options: shuffledOptions });
+    setAttentionCheckPassed(false);
+    setAttentionErrorMsg(null);
+
     // Open real ad network direct link
     triggerSmartAd("video");
 
     // Start in-app interactive ad progress modal
     setIsWatchingAd(true);
-    setAdProgressTimer(AD_WATCH_DURATION);
+    setAdWatchDurationTotal(duration);
+    setAdProgressTimer(duration);
     setCanClaimAdReward(false);
+  };
+
+  // Select Attention Check Option
+  const handleSelectAttentionOption = (isCorrect: boolean) => {
+    if (isCorrect) {
+      triggerHaptic("success");
+      setAttentionCheckPassed(true);
+      setCanClaimAdReward(true);
+      setAttentionErrorMsg(null);
+    } else {
+      triggerHaptic("error");
+      setAttentionErrorMsg(
+        language === "bn"
+          ? "❌ ভুল হয়েছে! রিওয়ার্ড পেতে নিচের নতুন প্রশ্নটি দেখে সঠিক অপশন বাছাই করুন।"
+          : "❌ Incorrect! Please check the new prompt below and select the right option."
+      );
+      // Pick another random question
+      const randomQ =
+        HIGH_CPM_ATTENTION_QUESTIONS[
+          Math.floor(Math.random() * HIGH_CPM_ATTENTION_QUESTIONS.length)
+        ];
+      const shuffledOptions = [...randomQ.options].sort(() => Math.random() - 0.5);
+      setAttentionQuestion({ ...randomQ, options: shuffledOptions });
+    }
   };
 
   // Claim Ad reward
@@ -270,12 +436,15 @@ export const TasksModal: React.FC<TasksModalProps> = ({
 
     setIsWatchingAd(false);
     setCanClaimAdReward(false);
+    setAttentionCheckPassed(false);
+    setAttentionQuestion(null);
+    setAttentionErrorMsg(null);
     setAdCooldown(AD_COOLDOWN_SECONDS);
 
     showInnerToast(
       language === "bn"
-        ? `🎉 বিজ্ঞাপন সম্পন্ন! +৳${AD_REWARD_AMOUNT.toFixed(2)} ব্যালেন্সে যুক্ত হয়েছে!`
-        : `🎉 Ad completed! +৳${AD_REWARD_AMOUNT.toFixed(2)} added to balance!`
+        ? `🎉 হাই-সিপিএম বিজ্ঞাপন সম্পন্ন! +৳${AD_REWARD_AMOUNT.toFixed(2)} ব্যালেন্সে যুক্ত হয়েছে!`
+        : `🎉 High-CPM Ad completed! +৳${AD_REWARD_AMOUNT.toFixed(2)} added to balance!`
     );
   };
 
@@ -386,7 +555,15 @@ export const TasksModal: React.FC<TasksModalProps> = ({
       }
     }
 
-    const duration = task.duration && task.duration > 0 ? task.duration : (task.iconType === 'telegram' || task.iconType === 'youtube' ? 30 : 10);
+    const adConfig = getAdConfig();
+    const minWebVisit = Number(adConfig.webVisitMinSeconds) || 25;
+    const isWebVisit = task.category === 'visit' || task.iconType === 'web';
+    const duration = task.duration && task.duration > 0
+      ? task.duration
+      : isWebVisit
+      ? minWebVisit
+      : (task.iconType === 'telegram' || task.iconType === 'youtube' ? 30 : 15);
+
     setVerifyingTasks((prev) => ({
       ...prev,
       [task.id]: {
@@ -398,8 +575,10 @@ export const TasksModal: React.FC<TasksModalProps> = ({
 
     showInnerToast(
       language === "bn"
-        ? `লিংক খোলা হয়েছে। অটো-ভেরিফিকেশন টাইমার শেষ হওয়া পর্যন্ত অপেক্ষা করুন... (${duration} সে.)`
-        : `Link opened. Wait for auto-verification countdown (${duration}s)...`
+        ? isWebVisit
+          ? `🌐 স্পন্সর ওয়েবসাইট খোলা হয়েছে। হাই CPM নিশ্চিত করতে ${duration} সেকেন্ড পেজটিতে থাকুন ও স্ক্রল করুন!`
+          : `লিংক খোলা হয়েছে। অটো-ভেরিফিকেশন টাইমার শেষ হওয়া পর্যন্ত অপেক্ষা করুন... (${duration} সে.)`
+        : `Link opened. Wait for verification countdown (${duration}s)...`
     );
   };
 
@@ -716,36 +895,92 @@ export const TasksModal: React.FC<TasksModalProps> = ({
           </div>
         </div>
 
-        {/* STATS PROGRESS BAR */}
-        <div className="bg-white rounded-2xl p-3.5 mb-4 shadow-xs border border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
-              <Layers size={20} />
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-800">
-                {language === "bn" ? "টাস্ক সম্পন্ন প্রগ্রেস" : "Task Completion Progress"}
-              </p>
-              <p className="text-[11px] text-slate-500 font-bold">
-                {completedCount} / {tasks.length} {language === "bn" ? "টাস্ক সম্পন্ন" : "tasks completed"}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-              {Math.round((completedCount / (tasks.length || 1)) * 100)}%
-            </span>
-          </div>
-        </div>
+        {/* DAILY MISSIONS MILESTONE PROGRESS BAR BANNER */}
+        {(() => {
+          const dailyMissionsState = loadDailyMissionsState();
+          const completedDailyMissionsCount = DAILY_MISSIONS_LIST.filter((m) => {
+            const current = Math.max(dailyMissionsState.counts[m.category] || 0, externalCounts[m.category] || 0);
+            return current >= m.target;
+          }).length;
+          const totalDailyMissionsCount = DAILY_MISSIONS_LIST.length;
+          const milestonesProgressPercent = Math.min(
+            100,
+            Math.round((completedDailyMissionsCount / totalDailyMissionsCount) * 100)
+          );
 
-        {/* THREE TABS */}
-        <div className="flex bg-white rounded-2xl p-1 mb-4 shadow-xs border border-slate-200">
+          return (
+            <div
+              onClick={() => {
+                triggerHaptic("medium");
+                setActiveTab("missions");
+              }}
+              className={`rounded-2xl p-3.5 mb-4 text-white border transition-all cursor-pointer active:scale-[0.99] relative overflow-hidden shadow-sm ${
+                activeTab === "missions"
+                  ? "bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 border-amber-400/50 ring-2 ring-amber-400/30"
+                  : "bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 border-indigo-500/30 hover:border-indigo-400"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-slate-950 shadow-sm shrink-0">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-black text-xs text-white">
+                        {language === "bn" ? "দৈনিক মিশন ও মাইলস্টোন প্রগ্রেস" : "Daily Missions & Milestones"}
+                      </h4>
+                      <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase">
+                        {completedDailyMissionsCount}/{totalDailyMissionsCount}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-indigo-200 font-medium">
+                      {language === "bn"
+                        ? `আজকের সম্পন্ন: ${completedDailyMissionsCount} / ${totalDailyMissionsCount} (${milestonesProgressPercent}%) • বোনাস আনলক করুন`
+                        : `Completed today: ${completedDailyMissionsCount} / ${totalDailyMissionsCount} (${milestonesProgressPercent}%) • Unlock Bonuses`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 text-xs font-black text-amber-300 bg-white/10 px-2.5 py-1 rounded-xl border border-white/15 shrink-0">
+                  <span>{activeTab === "missions" ? (language === "bn" ? "সক্রিয়" : "Active") : (language === "bn" ? "মিশন দেখুন" : "View")}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+
+              {/* Segmented Milestone Progress Bar */}
+              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/80 relative">
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-400 via-purple-400 to-amber-400 rounded-full transition-all duration-500"
+                  style={{ width: `${milestonesProgressPercent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* FOUR TABS */}
+        <div className="flex bg-white rounded-2xl p-1 mb-4 shadow-xs border border-slate-200 gap-1">
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("missions");
+            }}
+            className={`flex-1 py-2 text-[11px] sm:text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+              activeTab === "missions"
+                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Target size={13} />
+            <span>{language === "bn" ? "দৈনিক মিশন" : "Missions"}</span>
+          </button>
           <button
             onClick={() => {
               triggerHaptic("light");
               setActiveTab("all");
             }}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-[11px] sm:text-xs font-black rounded-xl transition-all cursor-pointer ${
               activeTab === "all"
                 ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-800"
@@ -758,37 +993,69 @@ export const TasksModal: React.FC<TasksModalProps> = ({
               triggerHaptic("light");
               setActiveTab("visit");
             }}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+            className={`flex-1 py-2 text-[11px] sm:text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
               activeTab === "visit"
                 ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            <Globe size={14} />
-            <span>{language === "bn" ? "ওয়েব ভিজিট" : "Visit Jobs"}</span>
+            <Globe size={13} />
+            <span>{language === "bn" ? "ওয়েব ভিজিট" : "Visit"}</span>
           </button>
           <button
             onClick={() => {
               triggerHaptic("light");
               setActiveTab("special");
             }}
-            className={`flex-1 py-2 text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
+            className={`flex-1 py-2 text-[11px] sm:text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 ${
               activeTab === "special"
                 ? "bg-gradient-to-r from-[#8b5cf6] to-[#a855f7] text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            <Briefcase size={14} />
-            <span>{language === "bn" ? "স্পেশাল" : "Special Jobs"}</span>
+            <Briefcase size={13} />
+            <span>{language === "bn" ? "স্পেশাল" : "Special"}</span>
           </button>
         </div>
 
-        {/* TASKS LIST */}
-        <div className="space-y-3">
-          {filteredTasks.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-300">
-              <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-500">
+        {/* ACTIVE TAB CONTENT */}
+        {activeTab === "missions" ? (
+          <DailyMissionsSection
+            language={language}
+            onRewardClaimed={handleMissionRewardClaimed}
+            onNavigateAction={handleMissionNavigate}
+            externalCounts={externalCounts}
+          />
+        ) : (
+          <>
+            {/* STATS PROGRESS BAR */}
+            <div className="bg-white rounded-2xl p-3.5 mb-4 shadow-xs border border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-800">
+                    {language === "bn" ? "টাস্ক সম্পন্ন প্রগ্রেস" : "Task Completion Progress"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-bold">
+                    {completedCount} / {tasks.length} {language === "bn" ? "টাস্ক সম্পন্ন" : "tasks completed"}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  {Math.round((completedCount / (tasks.length || 1)) * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* TASKS LIST */}
+            <div className="space-y-3">
+              {filteredTasks.length === 0 ? (
+                <div className="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-300">
+                  <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-500">
                 {language === "bn" ? "এই ক্যাটাগরিতে কোনো টাস্ক নেই" : "No tasks in this category"}
               </p>
             </div>
@@ -959,6 +1226,8 @@ export const TasksModal: React.FC<TasksModalProps> = ({
             })
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* AD WATCHING OVERLAY MODAL */}
@@ -968,15 +1237,21 @@ export const TasksModal: React.FC<TasksModalProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-gradient-to-b from-slate-900 to-purple-950 text-white rounded-3xl p-6 w-full max-w-xs border border-purple-500/30 text-center shadow-2xl relative overflow-hidden"
+              className="bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950 text-white rounded-3xl p-5 w-full max-w-xs border border-purple-500/40 text-center shadow-2xl relative overflow-hidden"
             >
-              <div className="w-16 h-16 rounded-full bg-purple-500/20 border border-purple-400/40 flex items-center justify-center mx-auto mb-4 relative">
+              {/* High CPM Network Header */}
+              <div className="inline-flex items-center gap-1.5 bg-purple-500/20 border border-purple-400/30 px-3 py-1 rounded-full text-[10px] font-black text-yellow-300 mb-3 uppercase tracking-wider">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Monetag & Adsterra High-CPM</span>
+              </div>
+
+              <div className="w-16 h-16 rounded-full bg-purple-500/20 border border-purple-400/40 flex items-center justify-center mx-auto mb-3 relative">
                 <Play className="w-7 h-7 text-yellow-300 ml-1" fill="currentColor" />
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -984,43 +1259,93 @@ export const TasksModal: React.FC<TasksModalProps> = ({
                 </span>
               </div>
 
-              <h3 className="text-lg font-black mb-1">
+              <h3 className="text-base font-black mb-1">
                 {canClaimAdReward
                   ? language === "bn"
-                    ? "বিজ্ঞাপন সম্পন্ন!"
-                    : "Ad Finished!"
+                    ? "বিজ্ঞাপন সম্পন্ন হয়েছে! 🎉"
+                    : "Ad Complete! 🎉"
+                  : adProgressTimer <= 0 && !canClaimAdReward
+                  ? language === "bn"
+                    ? "মনোযোগ যাচাই (Verification)"
+                    : "Attention Verification"
                   : language === "bn"
-                  ? "বিজ্ঞাপন প্রদর্শিত হচ্ছে..."
-                  : "Ad is Playing..."}
+                  ? "বিজ্ঞাপন ও স্পন্সর লোড হচ্ছে..."
+                  : "Ad & Sponsor Streaming..."}
               </h3>
-              <p className="text-xs text-purple-200 mb-5">
+              <p className="text-[11px] text-purple-200 mb-4">
                 {canClaimAdReward
                   ? language === "bn"
-                    ? "আপনার রিওয়ার্ড গ্রহণের জন্য প্রস্তুত।"
-                    : "Your reward is ready to be claimed."
+                    ? "আপনার সম্পূর্ণ রিওয়ার্ড গ্রহণের জন্য প্রস্তুত।"
+                    : "Your full reward is unlocked."
+                  : adProgressTimer <= 0 && !canClaimAdReward
+                  ? language === "bn"
+                    ? "নিচের সঠিক অপশনটি নির্বাচন করে রিওয়ার্ড আনলক করুন"
+                    : "Select the correct option below to unlock reward"
                   : language === "bn"
-                  ? "পুরস্কার পেতে পুরো সময় অপেক্ষা করুন"
-                  : "Please wait to earn your reward"}
+                  ? "হাই CPM বজায় রাখতে পুরো সময় পেজে থাকুন"
+                  : "Stay active for maximum CPM rewards"}
               </p>
 
-              {/* Countdown or Claim Button */}
-              {!canClaimAdReward ? (
+              {/* Countdown or Attention Check or Claim Button */}
+              {adProgressTimer > 0 ? (
                 <div className="space-y-3">
                   <div className="w-20 h-20 rounded-full border-4 border-purple-500/30 border-t-yellow-400 flex items-center justify-center mx-auto animate-spin">
                     <span className="text-2xl font-black text-yellow-300 font-mono -rotate-45">
                       {adProgressTimer}
                     </span>
                   </div>
+                  {/* Progress Line */}
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-purple-500/30">
+                    <div
+                      className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full transition-all duration-300 rounded-full"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, ((adWatchDurationTotal - adProgressTimer) / adWatchDurationTotal) * 100))}%`,
+                      }}
+                    />
+                  </div>
                   <p className="text-[11px] text-purple-300 font-bold">
-                    {adProgressTimer} {language === "bn" ? "সেকেন্ড বাকি" : "seconds remaining"}
+                    {adProgressTimer} {language === "bn" ? `সেকেন্ড বাকি (মোট: ${adWatchDurationTotal}s)` : `seconds remaining of ${adWatchDurationTotal}s`}
                   </p>
+                  <p className="text-[10px] text-slate-400">
+                    {language === "bn" ? "অ্যাড ব্যাকগ্রাউন্ডে চলছে, স্ক্রিন বন্ধ করবেন না।" : "Ad is running, please do not close."}
+                  </p>
+                </div>
+              ) : !canClaimAdReward && attentionQuestion ? (
+                /* Attention Check Form */
+                <div className="bg-purple-900/40 border border-purple-500/40 rounded-2xl p-3 text-center my-2">
+                  <div className="flex items-center justify-center gap-1 text-[11px] font-black text-amber-300 mb-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{language === "bn" ? "হিউম্যান ভেরিফিকেশন" : "Human Verification"}</span>
+                  </div>
+                  <p className="text-xs font-bold text-white mb-3">
+                    {language === "bn" ? attentionQuestion.promptBn : attentionQuestion.promptEn}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {attentionQuestion.options.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleSelectAttentionOption(opt.isCorrect)}
+                        className="py-2.5 px-1.5 bg-slate-800 hover:bg-purple-800 border border-purple-400/40 rounded-xl text-center active:scale-95 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 shadow-sm"
+                      >
+                        <span className="text-2xl">{opt.emoji}</span>
+                        <span className="text-[10px] font-bold text-purple-200">
+                          {language === "bn" ? opt.labelBn : opt.labelEn}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {attentionErrorMsg && (
+                    <p className="text-[11px] text-rose-300 font-bold mt-2">
+                      {attentionErrorMsg}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <button
                   onClick={handleClaimAdReward}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black text-sm rounded-xl shadow-lg hover:from-emerald-300 hover:to-teal-400 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black text-sm rounded-2xl shadow-lg hover:from-emerald-300 hover:to-teal-400 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-300/40"
                 >
-                  <Sparkles size={16} />
+                  <Sparkles size={18} className="text-slate-950" />
                   <span>
                     {language === "bn"
                       ? `+৳${AD_REWARD_AMOUNT.toFixed(2)} সংগ্রহ করুন`

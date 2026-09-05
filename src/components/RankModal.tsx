@@ -118,6 +118,7 @@ export const RankModal: React.FC<RankModalProps> = ({
             totalEarned: user.totalEarned || user.balance || 0,
             referralsCount: user.referralsCount || 0,
             tasksCompleted: totalUnlocks,
+            referralCode: user.referralCode,
           }),
         });
 
@@ -192,7 +193,9 @@ export const RankModal: React.FC<RankModalProps> = ({
     };
 
     syncAndFetchLeaderboard();
-  }, [isOpen, activeCategoryTab, activeTimeTab, user.id, user.balance, user.referralsCount, totalUnlocks]);
+    const pollInterval = setInterval(syncAndFetchLeaderboard, 3000);
+    return () => clearInterval(pollInterval);
+  }, [isOpen, activeCategoryTab, activeTimeTab, user.id, user.balance, user.referralsCount, user.referralCode, totalUnlocks]);
 
   // Handle "Tap to see your rank"
   const handleTapRank = () => {
@@ -582,146 +585,156 @@ export const RankModal: React.FC<RankModalProps> = ({
               </p>
             </div>
           ) : (
-            leaderboardList.map((item) => {
-              const badge = getRankBadge(item.rank);
-              const metric = getMetricDisplay(item);
-              const isUser = item.isCurrentUser;
+            <AnimatePresence mode="popLayout">
+              {leaderboardList.map((item, index) => {
+                const badge = getRankBadge(item.rank);
+                const metric = getMetricDisplay(item);
+                const isUser = item.isCurrentUser;
 
-              // Rank 1 Special Styling
-              if (item.rank === 1) {
+                // Rank 1 Special Styling
+                if (item.rank === 1) {
+                  return (
+                    <motion.div
+                      key={item.id || `rank_${item.rank}`}
+                      ref={isUser ? userCardRef : null}
+                      layout
+                      initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                      transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.03 }}
+                      className={`p-[2px] rounded-[1.5rem] bg-gradient-to-r from-[#2dd4bf] via-[#fef08a] to-[#ec4899] shadow-md relative transition-all ${
+                        isUser && highlightUser ? "ring-4 ring-pink-500 ring-offset-2 scale-[1.02]" : ""
+                      }`}
+                    >
+                      <div className="bg-[#fffae6] rounded-[1.4rem] p-3.5 flex items-center justify-between relative overflow-hidden">
+                        <div className="flex items-center gap-3 relative z-10">
+                          <Trophy className="w-[30px] h-[30px] text-[#eab308] fill-[#eab308] drop-shadow-md ml-1 shrink-0" />
+                          <div className="relative">
+                            <img
+                              src={item.avatar}
+                              alt="Avatar"
+                              className="w-[50px] h-[50px] rounded-full border-2 border-white shadow-sm object-cover bg-amber-100"
+                            />
+                            {isUser && (
+                              <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white text-[8px] font-black px-1 rounded-full border border-white">
+                                YOU
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="font-black text-slate-900 text-[15px] line-clamp-1 max-w-[130px]">
+                                {item.name}
+                              </span>
+                              {isUser && (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">
+                                  {language === 'bn' ? 'আপনি' : 'You'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <div className={`text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-xs border ${badge.style}`}>
+                                <span>{badge.icon}</span> {badge.text}
+                              </div>
+                              {activeCategoryTab === "Top Refs" && (
+                                <span className="text-[9px] font-black text-amber-800 bg-amber-200/90 px-2 py-0.5 rounded-full border border-amber-400 shadow-xs">
+                                  👑 {language === 'bn' ? 'বোনাস ৳৫০০' : 'Bonus ৳500'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-[1rem] px-4 py-2 shadow-sm flex flex-col items-center justify-center border border-slate-100 relative z-10 min-w-[70px]">
+                          <span className="text-[#2563eb] font-black text-[18px] leading-none mb-1">
+                            {metric.value}
+                          </span>
+                          <span className="text-slate-400 text-[9px] font-black tracking-wider leading-none uppercase">
+                            {metric.label}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // Rank 2, 3, 4+
                 return (
                   <motion.div
-                    key={item.id || item.rank}
+                    key={item.id || `rank_${item.rank}`}
                     ref={isUser ? userCardRef : null}
                     layout
-                    className={`p-[2px] rounded-[1.5rem] bg-gradient-to-r from-[#2dd4bf] via-[#fef08a] to-[#ec4899] shadow-md relative transition-all ${
-                      isUser && highlightUser ? "ring-4 ring-pink-500 ring-offset-2 scale-[1.02]" : ""
-                    }`}
+                    initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                    transition={{ duration: 0.35, ease: "easeOut", delay: index * 0.03 }}
+                    className={`bg-white rounded-[1.3rem] p-3.5 flex items-center justify-between border transition-all ${
+                      isUser
+                        ? "border-purple-300 bg-purple-50/40 shadow-sm"
+                        : "border-slate-100 shadow-xs"
+                    } ${isUser && highlightUser ? "ring-4 ring-pink-500 ring-offset-2 scale-[1.02]" : ""}`}
                   >
-                    <div className="bg-[#fffae6] rounded-[1.4rem] p-3.5 flex items-center justify-between relative overflow-hidden">
-                      <div className="flex items-center gap-3 relative z-10">
-                        <Trophy className="w-[30px] h-[30px] text-[#eab308] fill-[#eab308] drop-shadow-md ml-1 shrink-0" />
-                        <div className="relative">
-                          <img
-                            src={item.avatar}
-                            alt="Avatar"
-                            className="w-[50px] h-[50px] rounded-full border-2 border-white shadow-sm object-cover bg-amber-100"
-                          />
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-slate-700 bg-slate-100 shrink-0">
+                        {item.rank === 2 && <span className="text-base">🥈</span>}
+                        {item.rank === 3 && <span className="text-base">🥉</span>}
+                        {item.rank > 3 && `#${item.rank}`}
+                      </div>
+
+                      <div className="relative">
+                        <img
+                          src={item.avatar}
+                          alt="Avatar"
+                          className="w-11 h-11 rounded-full border border-slate-200 object-cover bg-slate-50"
+                        />
+                        {isUser && (
+                          <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white text-[8px] font-black px-1 rounded-full border border-white">
+                            YOU
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-bold text-slate-800 text-xs line-clamp-1 max-w-[130px]">
+                            {item.name}
+                          </h4>
                           {isUser && (
-                            <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white text-[8px] font-black px-1 rounded-full border border-white">
-                              YOU
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
+                              {language === 'bn' ? 'আপনি' : 'You'}
                             </span>
                           )}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="font-black text-slate-900 text-[15px] line-clamp-1 max-w-[130px]">
-                              {item.name}
+                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                          <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 border ${badge.style}`}>
+                            <span>{badge.icon}</span> {badge.text}
+                          </div>
+                          {activeCategoryTab === "Top Refs" && item.rank === 2 && (
+                            <span className="text-[9px] font-black text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded-full border border-slate-300">
+                              🥈 {language === 'bn' ? 'বোনাস ৳৩০০' : 'Bonus ৳300'}
                             </span>
-                            {isUser && (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">
-                                {language === 'bn' ? 'আপনি' : 'You'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            <div className={`text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-xs border ${badge.style}`}>
-                              <span>{badge.icon}</span> {badge.text}
-                            </div>
-                            {activeCategoryTab === "Top Refs" && (
-                              <span className="text-[9px] font-black text-amber-800 bg-amber-200/90 px-2 py-0.5 rounded-full border border-amber-400 shadow-xs">
-                                👑 {language === 'bn' ? 'বোনাস ৳৫০০' : 'Bonus ৳500'}
-                              </span>
-                            )}
-                          </div>
+                          )}
+                          {activeCategoryTab === "Top Refs" && item.rank === 3 && (
+                            <span className="text-[9px] font-black text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300">
+                              🥉 {language === 'bn' ? 'বোনাস ৳১৫০' : 'Bonus ৳150'}
+                            </span>
+                          )}
                         </div>
                       </div>
+                    </div>
 
-                      <div className="bg-white rounded-[1rem] px-4 py-2 shadow-sm flex flex-col items-center justify-center border border-slate-100 relative z-10 min-w-[70px]">
-                        <span className="text-[#2563eb] font-black text-[18px] leading-none mb-1">
-                          {metric.value}
-                        </span>
-                        <span className="text-slate-400 text-[9px] font-black tracking-wider leading-none uppercase">
-                          {metric.label}
-                        </span>
-                      </div>
+                    <div className="bg-slate-50 rounded-xl px-3 py-1.5 flex flex-col items-center min-w-[65px] border border-slate-100">
+                      <span className="text-slate-800 font-black text-sm leading-tight">
+                        {metric.value}
+                      </span>
+                      <span className="text-slate-400 text-[8px] font-bold uppercase tracking-wider">
+                        {metric.label}
+                      </span>
                     </div>
                   </motion.div>
                 );
-              }
-
-              // Rank 2, 3, 4+
-              return (
-                <motion.div
-                  key={item.id || item.rank}
-                  ref={isUser ? userCardRef : null}
-                  layout
-                  className={`bg-white rounded-[1.3rem] p-3.5 flex items-center justify-between border transition-all ${
-                    isUser
-                      ? "border-purple-300 bg-purple-50/40 shadow-sm"
-                      : "border-slate-100 shadow-xs"
-                  } ${isUser && highlightUser ? "ring-4 ring-pink-500 ring-offset-2 scale-[1.02]" : ""}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-slate-700 bg-slate-100 shrink-0">
-                      {item.rank === 2 && <span className="text-base">🥈</span>}
-                      {item.rank === 3 && <span className="text-base">🥉</span>}
-                      {item.rank > 3 && `#${item.rank}`}
-                    </div>
-
-                    <div className="relative">
-                      <img
-                        src={item.avatar}
-                        alt="Avatar"
-                        className="w-11 h-11 rounded-full border border-slate-200 object-cover bg-slate-50"
-                      />
-                      {isUser && (
-                        <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white text-[8px] font-black px-1 rounded-full border border-white">
-                          YOU
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-bold text-slate-800 text-xs line-clamp-1 max-w-[130px]">
-                          {item.name}
-                        </h4>
-                        {isUser && (
-                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded">
-                            {language === 'bn' ? 'আপনি' : 'You'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 border ${badge.style}`}>
-                          <span>{badge.icon}</span> {badge.text}
-                        </div>
-                        {activeCategoryTab === "Top Refs" && item.rank === 2 && (
-                          <span className="text-[9px] font-black text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded-full border border-slate-300">
-                            🥈 {language === 'bn' ? 'বোনাস ৳৩০০' : 'Bonus ৳300'}
-                          </span>
-                        )}
-                        {activeCategoryTab === "Top Refs" && item.rank === 3 && (
-                          <span className="text-[9px] font-black text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300">
-                            🥉 {language === 'bn' ? 'বোনাস ৳১৫০' : 'Bonus ৳150'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-xl px-3 py-1.5 flex flex-col items-center min-w-[65px] border border-slate-100">
-                    <span className="text-slate-800 font-black text-sm leading-tight">
-                      {metric.value}
-                    </span>
-                    <span className="text-slate-400 text-[8px] font-bold uppercase tracking-wider">
-                      {metric.label}
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })
+              })}
+            </AnimatePresence>
           )}
 
           {/* Motivational Call-to-Action Card */}

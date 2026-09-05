@@ -93,8 +93,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newPin, setNewPin] = useState('');
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
-  // Admin section tabs: 'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'settings'
-  const [adminTab, setAdminTab] = useState<'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'settings'>('withdrawals');
+  // Admin section tabs: 'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'userMessages' | 'settings'
+  const [adminTab, setAdminTab] = useState<'withdrawals' | 'earnLinks' | 'ads' | 'videos' | 'announcement' | 'userMessages' | 'settings'>('withdrawals');
+
+  // Direct Messaging to Users via Telegram Bot & In-App Notification State
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [msgTargetType, setMsgTargetType] = useState<'all' | 'select' | 'custom'>('all');
+  const [msgTargetUser, setMsgTargetUser] = useState<string>('');
+  const [msgCustomChatId, setMsgCustomChatId] = useState<string>('');
+  const [msgTitle, setMsgTitle] = useState<string>('🎉 আপনার অ্যাকাউন্ট ও আয়ের স্পেশাল বার্তা!');
+  const [msgText, setMsgText] = useState<string>('');
+  const [msgSendTelegram, setMsgSendTelegram] = useState<boolean>(true);
+  const [msgSendInApp, setMsgSendInApp] = useState<boolean>(true);
+  const [msgSending, setMsgSending] = useState<boolean>(false);
+  const [msgResultBanner, setMsgResultBanner] = useState<{ success: boolean; text: string } | null>(null);
+
+  const fetchRegisteredUsers = async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        setRegisteredUsers(data.users);
+        if (data.users.length > 0 && !msgTargetUser) {
+          setMsgTargetUser(data.users[0].id);
+        }
+      }
+    } catch (err) {}
+  };
+
+  useEffect(() => {
+    if (adminTab === 'userMessages') {
+      fetchRegisteredUsers();
+    }
+  }, [adminTab]);
 
   // System Settings state
   const [sysSettings, setSysSettings] = useState<SystemSettings>(() => getSystemSettings());
@@ -362,6 +393,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       ...config,
       minWithdraw: Math.max(10, Number(config.minWithdraw) || 1000),
       adminPin: newPin.trim().length >= 4 ? newPin.trim() : config.adminPin,
+      adWatchDuration: Math.max(5, Number(config.adWatchDuration) || 30),
+      webVisitMinSeconds: Math.max(5, Number(config.webVisitMinSeconds) || 25),
+      enableAttentionCheck: config.enableAttentionCheck !== undefined ? Boolean(config.enableAttentionCheck) : true,
+      highCpmTierEnabled: config.highCpmTierEnabled !== undefined ? Boolean(config.highCpmTierEnabled) : true,
     };
 
     saveAdConfig(updated);
@@ -636,7 +671,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   triggerHaptic('light');
                   setAdminTab('announcement');
                 }}
-                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
                   adminTab === 'announcement'
                     ? 'border-indigo-400 text-indigo-300'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -644,6 +679,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               >
                 <Megaphone className="w-3.5 h-3.5 text-indigo-400" />
                 <span>নোটিশ</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setAdminTab('userMessages');
+                }}
+                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 pb-2 pt-1 text-[11px] font-bold border-b-2 transition-all cursor-pointer ${
+                  adminTab === 'userMessages'
+                    ? 'border-emerald-400 text-emerald-300'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Send className="w-3.5 h-3.5 text-emerald-400" />
+                <span>মেসেজিং</span>
               </button>
 
               <button
@@ -1476,6 +1526,144 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 {/* Form */}
                 <form onSubmit={handleSaveAll} className="space-y-4">
+                  {/* HIGH CPM OPTIMIZER & AD WATCH DURATION */}
+                  <div className="p-4 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-2xl space-y-3.5 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs">
+                          🔥
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                            <span>হাই CPM ও বিজ্ঞাপন সময় সেটিংস (High CPM & Duration)</span>
+                          </h4>
+                          <p className="text-[10px] text-amber-800 font-medium">
+                            ইউজাররা যত বেশি সময় বিজ্ঞাপন দেখবে, Monetag ও Adsterra-তে CPM তত বেশি ($৩ - $১০+) আসবে
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-amber-950 bg-amber-200 px-2 py-0.5 rounded-full border border-amber-400">
+                        Top Revenue
+                      </span>
+                    </div>
+
+                    {/* Setting 1: Ad Watch Duration in Seconds */}
+                    <div className="space-y-2 bg-white/80 p-3 rounded-xl border border-amber-200">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>বিজ্ঞাপন দেখার বাধ্যতামূলক সময় (Ad Watch Seconds):</span>
+                        </label>
+                        <span className="text-xs font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300">
+                          {config.adWatchDuration || 30} সেকেন্ড
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        ইউজারকে রিওয়ার্ড পাওয়ার জন্য ঠিক কত সেকেন্ড বিজ্ঞাপনে অপেক্ষা করতে হবে তা নির্ধারণ করুন।
+                      </p>
+
+                      {/* Preset Quick Selectors */}
+                      <div className="grid grid-cols-5 gap-1.5 pt-1">
+                        {[15, 20, 30, 45, 60].map((sec) => (
+                          <button
+                            key={sec}
+                            type="button"
+                            onClick={() => setConfig({ ...config, adWatchDuration: sec })}
+                            className={`py-1.5 px-1 text-[11px] font-black rounded-lg border transition-all cursor-pointer text-center ${
+                              (config.adWatchDuration || 30) === sec
+                                ? "bg-amber-500 text-slate-950 border-amber-600 shadow-xs ring-2 ring-amber-400/40"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-amber-50"
+                            }`}
+                          >
+                            {sec}s {sec === 30 ? "⭐" : sec === 45 ? "🚀" : ""}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[11px] text-slate-500 font-bold">কাস্টম সেকেন্ড দিন:</span>
+                        <input
+                          type="number"
+                          min={5}
+                          max={180}
+                          value={config.adWatchDuration || 30}
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              adWatchDuration: Math.max(5, parseInt(e.target.value, 10) || 30),
+                            })
+                          }
+                          className="w-20 text-xs font-black py-1 px-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <span className="text-[10px] text-slate-400">সেকেন্ড (ন্যূনতম ৫ - সর্বোচ্চ ১৮০)</span>
+                      </div>
+                    </div>
+
+                    {/* Setting 2: Anti-Bot Human Attention Check */}
+                    <div className="bg-white/80 p-3 rounded-xl border border-amber-200 space-y-1.5">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <div className="pr-2">
+                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>মানবীয় মনোযোগ ও বট রোধ চেক (Anti-Bot Attention Check)</span>
+                          </span>
+                          <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                            অ্যাড শেষ হওয়ার সাথে সাথে ইউজারকে একটি সহজ হিউম্যান ট্যাপ করতে হবে। এতে অটো-ক্লিকার রোধ হয় এবং অ্যাড নেটওয়ার্কে ট্রাফিকের মান 'ভেরিফাইড প্রিমিয়াম' হিসেবে সর্বোচ্চ CPM এনে দেয়।
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={config.enableAttentionCheck !== false}
+                          onChange={(e) =>
+                            setConfig({ ...config, enableAttentionCheck: e.target.checked })
+                          }
+                          className="w-4 h-4 text-amber-600 rounded cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Setting 3: Sponsor Web Visit Retention Seconds */}
+                    <div className="bg-white/80 p-3 rounded-xl border border-amber-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-blue-600" />
+                          <span>ওয়েব ভিজিট টাস্কে মিনিমাম থাকার সময় (Web Dwell Time):</span>
+                        </label>
+                        <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200">
+                          {config.webVisitMinSeconds || 25} সেকেন্ড
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {[15, 25, 30, 45].map((sec) => (
+                          <button
+                            key={sec}
+                            type="button"
+                            onClick={() => setConfig({ ...config, webVisitMinSeconds: sec })}
+                            className={`flex-1 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
+                              (config.webVisitMinSeconds || 25) === sec
+                                ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            {sec}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* High CPM Golden Rules Checklist */}
+                    <div className="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-[11px] text-amber-950 space-y-1">
+                      <p className="font-black text-amber-900 flex items-center gap-1">
+                        <span>💡 হাই CPM নিশ্চিত করার গোল্ডেন টিপস:</span>
+                      </p>
+                      <ul className="space-y-0.5 text-[10px] text-amber-900/90 list-disc pl-3.5 font-medium">
+                        <li>অ্যাড ওয়াচ টাইম <strong>৩০ সেকেন্ড</strong> রাখলে অ্যাড নেটওয়ার্ক সম্পূর্ণ ইমপ্রেশন কাউন্ট করে।</li>
+                        <li><strong>রোটেশন মোড "সাইকেল (সবগুলো)"</strong> রাখলে একই ইউজারের কাছে বারবার একই অ্যাড গিয়ে CPM কমে যাওয়া রোধ হয়।</li>
+                        <li>বট রোধ চেক সক্রিয় রাখলে অবৈধ ক্লিক পেনাল্টি থেকে অ্যাকাউন্ট নিরাপদ থাকে।</li>
+                      </ul>
+                    </div>
+                  </div>
+
                   {/* SECTION 1: DUAL AD LINKS */}
                   <div className="p-4 bg-white border border-slate-200 rounded-2xl space-y-3.5 shadow-sm">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -2100,6 +2288,338 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       ✅ নোটিশ সফলভাবে আপডেট হয়েছে! সব ইউজারের কাছে পপ-আপ দেখাবে।
                     </div>
                   )}
+                </div>
+              </div>
+            ) : adminTab === 'userMessages' ? (
+              /* TAB 6: DIRECT USER MESSAGING & TELEGRAM BOT NOTIFICATIONS */
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-900 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-inner shrink-0">
+                      <Send className="w-5 h-5 text-emerald-300 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-white">ইউজারদের সরাসরি মেসেজ পাঠান</h3>
+                      <p className="text-[11px] text-emerald-100 font-medium">
+                        টেলিগ্রাম বটের মাধ্যমে ডাইরেক্ট ইনবক্স মেসেজ এবং অ্যাপের ইন-অ্যাপ নোটিফিকেশন পাঠান।
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Card */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+                  {/* Target Recipient Selector */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>মেসেজ প্রাপক নির্বাচন করুন (Recipient):</span>
+                    </label>
+
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setMsgTargetType('all')}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          msgTargetType === 'all'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-black shadow-xs'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="text-xs">📢 সকল ইউজার</div>
+                        <div className="text-[9px] text-slate-500 font-normal">All Users ({registeredUsers.length})</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMsgTargetType('select')}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          msgTargetType === 'select'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-black shadow-xs'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="text-xs">👤 নির্দিষ্ট ইউজার</div>
+                        <div className="text-[9px] text-slate-500 font-normal">Select User</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setMsgTargetType('custom')}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          msgTargetType === 'custom'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-black shadow-xs'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="text-xs">🆔 চ্যাট আইডি</div>
+                        <div className="text-[9px] text-slate-500 font-normal">Custom Chat ID</div>
+                      </button>
+                    </div>
+
+                    {msgTargetType === 'select' && (
+                      <div className="space-y-1.5 animate-in fade-in">
+                        <select
+                          value={msgTargetUser}
+                          onChange={(e) => setMsgTargetUser(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {registeredUsers.length === 0 && <option value="">ইউজার লোড হচ্ছে...</option>}
+                          {registeredUsers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} {u.username ? `(${u.username})` : ''} - Chat ID: {u.chatId || 'N/A'} (৳{u.balance || 0})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {msgTargetType === 'custom' && (
+                      <div className="space-y-1.5 animate-in fade-in">
+                        <input
+                          type="text"
+                          value={msgCustomChatId}
+                          onChange={(e) => setMsgCustomChatId(e.target.value)}
+                          placeholder="টেলিগ্রাম Chat ID লিখুন (যেমন: 7905126253)"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Channel Toggles */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">
+                      মেসেজ পাঠানোর মাধ্যমসমূহ (Delivery Method):
+                    </label>
+                    <div className="flex flex-wrap gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={msgSendTelegram}
+                          onChange={(e) => setMsgSendTelegram(e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                        />
+                        <span>🤖 টেলিগ্রাম বট মেসেজ (Direct Bot Inbox)</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={msgSendInApp}
+                          onChange={(e) => setMsgSendInApp(e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                        />
+                        <span>📱 ইন-অ্যাপ নোটিফিকেশন (App Notification)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Quick Templates */}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 mb-1.5 block">
+                      ⚡ দ্রুত মেসেজ টেমপ্লেট (Quick Templates):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMsgTitle('🎉 আপনার উইথড্র পেমেন্ট সফল হয়েছে!');
+                          setMsgText('অভিনন্দন! আপনার অনুরোধকৃত উইথড্র টাকা সফলভাবে পাঠিয়ে দেওয়া হয়েছে। আপনার বিকাশ/নগদ স্টেটমেন্ট চেক করুন। ধন্যবাদ স্মার্ট আর্নিং বিডির সাথে থাকার জন্য! ❤️');
+                        }}
+                        className="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-emerald-300 transition-all cursor-pointer"
+                      >
+                        ✅ উইথড্র কনফার্ম
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMsgTitle('🎁 বিশেষ বোনাস রিওয়ার্ড যুক্ত করা হয়েছে!');
+                          setMsgText('আপনার অ্যাকাউন্টে বিশেষ অ্যাক্টিভিটি বোনাস যোগ করে দেওয়া হয়েছে। অ্যাপ খুলুন এবং আপনার ব্যালেন্স চেক করে নিন! 🚀');
+                        }}
+                        className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-amber-300 transition-all cursor-pointer"
+                      >
+                        🎁 গিফট বোনাস
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMsgTitle('⚠️ অ্যাকাউন্ট নোটিশ');
+                          setMsgText('প্রিয় ইউজার, নিয়ম মেনে অ্যাপ ব্যবহার করুন। ভিপিএন অন বা ফেইক রেফার করার চেষ্টা করলে অ্যাকাউন্ট ব্লক হতে পারে। সঠিক নিয়মে কাজ করে আনলিমিটেড আয় করুন।');
+                        }}
+                        className="bg-rose-100 hover:bg-rose-200 text-rose-800 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-rose-300 transition-all cursor-pointer"
+                      >
+                        ⚠️ একাউন্ট ওয়ার্নিং
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Message Title */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1">
+                      মেসেজ শিরোনাম / টাইটেল:
+                    </label>
+                    <input
+                      type="text"
+                      value={msgTitle}
+                      onChange={(e) => setMsgTitle(e.target.value)}
+                      placeholder="যেমন: 🎉 আপনার উইথড্র সফল হয়েছে!"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  {/* Message Details */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1">
+                      বার্তার বিবরণ (Message Details):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={msgText}
+                      onChange={(e) => setMsgText(e.target.value)}
+                      placeholder="এখানে ইউজারের জন্য বিস্তারিত বার্তা লিখুন..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                    />
+                  </div>
+
+                  {/* Action Button */}
+                  <button
+                    type="button"
+                    disabled={msgSending}
+                    onClick={async () => {
+                      if (!msgTitle.trim() || !msgText.trim()) {
+                        setMsgResultBanner({ success: false, text: 'শিরোনাম এবং বার্তা লিখুন।' });
+                        return;
+                      }
+                      if (!msgSendTelegram && !msgSendInApp) {
+                        setMsgResultBanner({ success: false, text: 'কমপক্ষে একটি মাধ্যমে (টেলিগ্রাম অথবা ইন-অ্যাপ) মেসেজ পাঠানোর অপশন নির্বাচন করুন।' });
+                        return;
+                      }
+
+                      setMsgSending(true);
+                      setMsgResultBanner(null);
+
+                      let targetId = 'all';
+                      let tgChatId = '';
+
+                      if (msgTargetType === 'select') {
+                        targetId = msgTargetUser;
+                        const selectedObj = registeredUsers.find((u) => u.id === msgTargetUser);
+                        if (selectedObj) tgChatId = selectedObj.chatId;
+                      } else if (msgTargetType === 'custom') {
+                        targetId = 'custom';
+                        tgChatId = msgCustomChatId.trim();
+                      }
+
+                      try {
+                        const res = await fetch('/api/admin/send-user-message', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            targetUserId: targetId,
+                            telegramChatId: tgChatId,
+                            title: msgTitle.trim(),
+                            message: msgText.trim(),
+                            sendTelegram: msgSendTelegram,
+                            sendInApp: msgSendInApp,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setMsgResultBanner({
+                            success: true,
+                            text: `✅ ${data.message || 'মেসেজ সফলভাবে পাঠানো হয়েছে!'}`,
+                          });
+                          triggerHaptic('success');
+                        } else {
+                          setMsgResultBanner({
+                            success: false,
+                            text: `❌ ${data.error || data.errorDetails || 'মেসেজ পাঠানো সম্ভব হয়নি।'}`,
+                          });
+                          triggerHaptic('error');
+                        }
+                      } catch (err: any) {
+                        setMsgResultBanner({ success: false, text: `❌ সংযোগ সমস্যা: ${err.message || 'সার্ভার পাওয়া যায়নি'}` });
+                      } finally {
+                        setMsgSending(false);
+                      }
+                    }}
+                    className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {msgSending ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 text-white animate-spin" />
+                        <span>মেসেজ পাঠানো হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 text-emerald-200" />
+                        <span>সরাসরি মেসেজ পাঠান (Send Message Now)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Result Banner */}
+                  {msgResultBanner && (
+                    <div
+                      className={`p-3.5 rounded-xl text-center text-xs font-bold border animate-in fade-in ${
+                        msgResultBanner.success
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-rose-50 border-rose-200 text-rose-800'
+                      }`}
+                    >
+                      {msgResultBanner.text}
+                    </div>
+                  )}
+                </div>
+
+                {/* User List Quick Table */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+                  <h4 className="font-black text-xs text-slate-800 mb-2 flex items-center justify-between">
+                    <span>রজিস্টার্ড ইউজারদের তালিকা ({registeredUsers.length})</span>
+                    <button
+                      onClick={fetchRegisteredUsers}
+                      className="text-[10px] text-emerald-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" /> রিফ্রেশ
+                    </button>
+                  </h4>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {registeredUsers.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">কোনো রজিস্টার্ড ইউজার পাওয়া যায়নি।</p>
+                    ) : (
+                      registeredUsers.map((u) => (
+                        <div
+                          key={u.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition-all text-xs"
+                        >
+                          <div>
+                            <span className="font-bold text-slate-800 block line-clamp-1">{u.name}</span>
+                            <span className="text-[10px] text-slate-500">
+                              Chat ID: <strong className="text-slate-700">{u.chatId || 'N/A'}</strong> | ৳{u.balance || 0}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMsgTargetType('select');
+                              setMsgTargetUser(u.id);
+                              triggerHaptic('light');
+                            }}
+                            className="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-emerald-300 shrink-0 cursor-pointer"
+                          >
+                            📩 সিলেক্ট করুন
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             ) : adminTab === 'settings' ? (

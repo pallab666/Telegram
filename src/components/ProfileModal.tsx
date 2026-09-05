@@ -14,8 +14,12 @@ import {
   AtSign,
   Check,
   Sparkles,
+  Award,
+  Zap,
+  CheckCircle2,
+  Trophy,
 } from "lucide-react";
-import { UserData, WithdrawalRecord } from "../types";
+import { UserData, WithdrawalRecord, EarnTask, VideoClip } from "../types";
 import { triggerHaptic } from "../utils/telegram";
 import { buildReferralLink } from "../utils/systemSettings";
 
@@ -31,7 +35,98 @@ interface ProfileModalProps {
   onlineCount?: number;
   onOpenSettings?: () => void;
   language?: 'bn' | 'en';
+  tasksCompletedCount?: number;
+  tasks?: EarnTask[];
+  videos?: VideoClip[];
 }
+
+export interface UserLevelInfo {
+  level: number;
+  titleBn: string;
+  titleEn: string;
+  badgeIcon: string;
+  bgGradient: string;
+  textColor: string;
+  borderColor: string;
+  nextLevelMin: number;
+  currentTasks: number;
+  progressPercent: number;
+  tasksNeededForNext: number;
+}
+
+export const calculateUserLevel = (completedCount: number): UserLevelInfo => {
+  if (completedCount >= 50) {
+    return {
+      level: 5,
+      titleBn: 'কিংবদন্তি চ্যাম্পিয়ন',
+      titleEn: 'Legend Earner',
+      badgeIcon: '👑',
+      bgGradient: 'from-amber-400 via-purple-500 to-pink-500',
+      textColor: 'text-amber-300',
+      borderColor: 'border-amber-400',
+      nextLevelMin: 50,
+      currentTasks: completedCount,
+      progressPercent: 100,
+      tasksNeededForNext: 0,
+    };
+  } else if (completedCount >= 30) {
+    return {
+      level: 4,
+      titleBn: 'প্লাটিনাম প্রো',
+      titleEn: 'Platinum Pro',
+      badgeIcon: '💎',
+      bgGradient: 'from-cyan-400 to-blue-600',
+      textColor: 'text-cyan-300',
+      borderColor: 'border-cyan-400',
+      nextLevelMin: 50,
+      currentTasks: completedCount,
+      progressPercent: Math.min(100, Math.round(((completedCount - 30) / (50 - 30)) * 100)),
+      tasksNeededForNext: 50 - completedCount,
+    };
+  } else if (completedCount >= 15) {
+    return {
+      level: 3,
+      titleBn: 'গোল্ড মাস্টার',
+      titleEn: 'Gold Master',
+      badgeIcon: '🥇',
+      bgGradient: 'from-amber-400 to-yellow-600',
+      textColor: 'text-yellow-300',
+      borderColor: 'border-yellow-400',
+      nextLevelMin: 30,
+      currentTasks: completedCount,
+      progressPercent: Math.min(100, Math.round(((completedCount - 15) / (30 - 15)) * 100)),
+      tasksNeededForNext: 30 - completedCount,
+    };
+  } else if (completedCount >= 5) {
+    return {
+      level: 2,
+      titleBn: 'সিলভার টাস্কার',
+      titleEn: 'Silver Tasker',
+      badgeIcon: '🥈',
+      bgGradient: 'from-slate-300 to-slate-500',
+      textColor: 'text-slate-200',
+      borderColor: 'border-slate-300',
+      nextLevelMin: 15,
+      currentTasks: completedCount,
+      progressPercent: Math.min(100, Math.round(((completedCount - 5) / (15 - 5)) * 100)),
+      tasksNeededForNext: 15 - completedCount,
+    };
+  } else {
+    return {
+      level: 1,
+      titleBn: 'নবীন টাস্কার',
+      titleEn: 'Novice Earner',
+      badgeIcon: '🌱',
+      bgGradient: 'from-emerald-400 to-teal-600',
+      textColor: 'text-emerald-300',
+      borderColor: 'border-emerald-400',
+      nextLevelMin: 5,
+      currentTasks: completedCount,
+      progressPercent: Math.min(100, Math.round((completedCount / 5) * 100)),
+      tasksNeededForNext: 5 - completedCount,
+    };
+  }
+};
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
@@ -43,6 +138,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onlineCount = 1,
   onOpenSettings,
   language = 'bn',
+  tasksCompletedCount,
+  tasks,
+  videos,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -60,6 +158,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   if (!isOpen) return null;
 
   const inviteLink = buildReferralLink(user.referralCode);
+
+  const completedTasks =
+    tasksCompletedCount ??
+    ((tasks?.filter((t) => t.completed).length || 0) +
+      (videos?.filter((v) => v.watched).length || 0));
+
+  const levelInfo = calculateUserLevel(completedTasks);
 
   const handleCopyLink = () => {
     if (inviteLink) {
@@ -198,6 +303,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </button>
           </div>
 
+          {/* Level Badge Pill */}
+          <div className={`bg-gradient-to-r ${levelInfo.bgGradient} text-white text-[12px] font-black px-3.5 py-1 rounded-full inline-flex items-center gap-1.5 shadow-md border border-white/30 backdrop-blur-md mb-2.5`}>
+            <span>{levelInfo.badgeIcon}</span>
+            <span>Level {levelInfo.level}: {language === 'bn' ? levelInfo.titleBn : levelInfo.titleEn}</span>
+          </div>
+
           <div className="bg-white/20 text-white text-[13px] font-bold px-5 py-2 rounded-full inline-flex items-center gap-1.5 mb-5 backdrop-blur-sm border border-white/10 shadow-inner">
             Balance{" "}
             <span className="text-[#4ade80] ml-1">
@@ -232,6 +343,56 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* User Level & Badge Progress Card */}
+        <div className="mx-4 mb-5 bg-white rounded-[1.5rem] p-5 shadow-sm border border-purple-100 relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${levelInfo.bgGradient} flex items-center justify-center text-2xl shadow-md border border-white/40`}>
+                {levelInfo.badgeIcon}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200/60">
+                    Level {levelInfo.level}
+                  </span>
+                  <span className="text-slate-900 font-black text-sm">
+                    {language === 'bn' ? levelInfo.titleBn : levelInfo.titleEn}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  {language === 'bn' ? 'মোট সম্পন্ন টাস্ক:' : 'Total Tasks Completed:'} <strong className="text-purple-700 font-black">{completedTasks}টি</strong>
+                </p>
+              </div>
+            </div>
+            <Award className="w-6 h-6 text-purple-400 opacity-80 shrink-0" />
+          </div>
+
+          {/* Progress Bar */}
+          {levelInfo.level < 5 ? (
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold mb-1.5">
+                <span className="text-slate-500">
+                  {language === 'bn' ? `পরবর্তী লেভেল ${levelInfo.level + 1}` : `Next Level ${levelInfo.level + 1}`}
+                </span>
+                <span className="text-purple-700 font-black">
+                  {levelInfo.tasksNeededForNext} {language === 'bn' ? 'টি টাস্ক বাকি' : 'tasks needed'}
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                <div
+                  className={`h-full rounded-full bg-gradient-to-r ${levelInfo.bgGradient} transition-all duration-500 shadow-xs`}
+                  style={{ width: `${Math.max(6, levelInfo.progressPercent)}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 text-center text-amber-900 text-xs font-bold flex items-center justify-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+              <span>{language === 'bn' ? 'আপনি সর্বোচ্চ লেভেলে আছেন! 🏆' : 'You are at maximum level! 🏆'}</span>
+            </div>
+          )}
         </div>
 
         {/* Action Buttons Grid */}
